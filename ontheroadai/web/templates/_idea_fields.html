@@ -1,0 +1,44 @@
+{# Shared idea form fields. Needs: content_types, platforms, brands, score_inputs, factors, and optional `i` (existing idea). #}
+<div class="grid2">
+  <label>Title <input name="title" required maxlength="200" value="{{ i.title if i else '' }}"></label>
+  <label>Content type
+    <select name="content_type" required>
+      {% for k, label in content_types.items() %}
+        <option value="{{ k }}" {{ 'selected' if i and i.content_type == k }}>{{ label }}</option>
+      {% endfor %}
+    </select>
+  </label>
+  <label>Brand
+    <select name="brand_id">
+      <option value="">— none —</option>
+      {% for br in brands %}
+        <option value="{{ br.id }}" {{ 'selected' if i and i.brand_id == br.id }}>{{ br.name }}</option>
+      {% endfor %}
+    </select>
+  </label>
+  <fieldset>
+    <legend>Target platforms</legend>
+    {% for p in platforms %}
+      <label class="inline"><input type="checkbox" name="target_platforms" value="{{ p }}"
+        {{ 'checked' if i and p in i.target_platforms_list }}> {{ PLATFORMS[p] }}</label>
+    {% endfor %}
+  </fieldset>
+</div>
+<label>Hook (first 1–2 seconds) <input name="hook" maxlength="300" value="{{ i.hook if i else '' }}"
+  placeholder="e.g. “I asked 50 fans one question after the loss…”"></label>
+<label>Description / notes <textarea name="description" rows="3">{{ i.description if i else '' }}</textarea></label>
+<label class="inline"><input type="checkbox" name="needs_external_footage" value="1"
+  {{ 'checked' if i and i.needs_external_footage }}> Uses footage we did not shoot ourselves (gameplay, streams, broadcast…)</label>
+
+<fieldset class="scores">
+  <legend>Scoring inputs (0–10)</legend>
+  {% for k in score_inputs %}
+    <label title="{{ factors[k][1] }}">{{ factors[k][0] }}
+      <span class="range"><input type="range" name="{{ k }}" min="0" max="10" step="1"
+        value="{{ i[k] if i else 5 }}" oninput="this.nextElementSibling.value=this.value">
+      <output>{{ i[k] if i else 5 }}</output></span>
+      <small class="muted">{{ factors[k][1] }}</small>
+    </label>
+  {% endfor %}
+  <p class="small muted">Rights clarity (10 pts) is calculated automatically from linked footage permissions.</p>
+</fieldset>

@@ -1,0 +1,27 @@
+{% extends "base.html" %}
+{% block title %}Agents{% endblock %}
+{% block content %}
+<h1>The nine agents</h1>
+<p class="muted"><span class="agent a-implemented">implemented</span> works now ·
+  <span class="agent a-partial">partial</span> some real checks run, more planned ·
+  <span class="agent a-planned">planned</span> not built yet. The Orchestrator hands its tasks to a person.</p>
+<div class="cards">
+{% for key, s in SPECS.items() %}
+  <div class="card agent-card">
+    <h3>{{ s.name }} <span class="agent a-{{ s.status }}">{{ s.status }}</span></h3>
+    <p class="small">{{ s.role }}</p>
+    {% if s.works_today %}
+      <p class="small"><b>Works today</b></p>
+      <ul class="small">{% for w in s.works_today %}<li>{{ w }}</li>{% endfor %}</ul>
+    {% else %}
+      <p class="small"><b>Works today:</b> <span class="muted">nothing automated. Tasks go to a person.</span></p>
+    {% endif %}
+    {% if s.planned %}
+      <p class="small"><b>Planned</b>{% if s.target_milestone %} <span class="muted">({{ s.target_milestone }})</span>{% endif %}</p>
+      <ul class="small muted">{% for p in s.planned %}<li>{{ p }}</li>{% endfor %}</ul>
+    {% endif %}
+    <p class="small muted">Tasks: {% for st, n in counts.get(key, {}).items() %}{{ st|replace('_',' ') }} {{ n }}{{ ', ' if not loop.last }}{% else %}none{% endfor %}</p>
+  </div>
+{% endfor %}
+</div>
+{% endblock %}

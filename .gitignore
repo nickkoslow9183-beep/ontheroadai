@@ -1,0 +1,19 @@
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+*.egg-info/
+.pytest_cache/
+
+# Local data (never commit the working database)
+data/
+*.db
+*.sqlite3
+
+# Secrets
+.env
+.env.*
+*.pem
+*.key
+credentials*.json

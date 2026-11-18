@@ -1,0 +1,19 @@
+[project]
+name = "ontheroadai"
+version = "0.1.0"
+description = "Content operations system for On The Road Media and the GTA 6 Content Network"
+requires-python = ">=3.10"
+dependencies = ["flask>=3.0,<4"]
+
+[project.optional-dependencies]
+dev = ["pytest>=8"]
+
+[tool.setuptools.packages.find]
+include = ["ontheroadai*"]
+
+[tool.setuptools.package-data]
+"ontheroadai.web" = ["templates/*.html", "static/*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = [".", "tests"]

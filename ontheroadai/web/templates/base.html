@@ -1,0 +1,31 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{% block title %}OnTheRoadAI{% endblock %} · OnTheRoadAI</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+<header class="top">
+  <a class="brand" href="{{ url_for('overview') }}">OnTheRoad<span>AI</span></a>
+  <nav>
+    <a href="{{ url_for('overview') }}" class="{{ 'on' if request.endpoint == 'overview' }}">Overview</a>
+    {% for b in nav_businesses %}
+      <a href="{{ url_for('business', slug=b.slug) }}"
+         class="{{ 'on' if request.view_args and request.view_args.get('slug') == b.slug }}">{{ b.name }}</a>
+    {% endfor %}
+    <a href="{{ url_for('rights_page') }}" class="{{ 'on' if request.endpoint == 'rights_page' }}">Footage rights</a>
+    <a href="{{ url_for('analytics_page') }}" class="{{ 'on' if request.endpoint == 'analytics_page' }}">Analytics</a>
+    <a href="{{ url_for('agents_page') }}" class="{{ 'on' if request.endpoint == 'agents_page' }}">Agents</a>
+  </nav>
+</header>
+<main>
+  {% with messages = get_flashed_messages(with_categories=true) %}
+    {% for cat, msg in messages %}<div class="flash {{ cat }}" role="status">{{ msg }}</div>{% endfor %}
+  {% endwith %}
+  {% block content %}{% endblock %}
+</main>
+<footer>Local tool · nothing is ever posted automatically · Milestone 1</footer>
+</body>
+</html>

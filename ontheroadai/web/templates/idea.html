@@ -1,0 +1,159 @@
+{% extends "base.html" %}
+{% block title %}{{ idea.title }}{% endblock %}
+{% block content %}
+<p class="small"><a href="{{ url_for('business', slug=idea.business_slug) }}">← {{ idea.business_name }}</a></p>
+<div class="row-between">
+  <h1>{{ idea.title }}</h1>
+  <div>{{ badge(idea.status) }}</div>
+</div>
+<p class="muted">{{ content_types.get(idea.content_type, idea.content_type) }}{% if idea.brand_name %} · {{ idea.brand_name }}{% endif %}
+  {% if idea.hook %}<br>Hook: “{{ idea.hook }}”{% endif %}</p>
+
+<div class="layout">
+<div>
+  <section id="score">
+    <h2>Opportunity score: <span class="score big">{{ idea.score }}</span><span class="muted">/100</span></h2>
+    {% if idea.breakdown %}
+    <table>
+      <thead><tr><th>Factor</th><th class="num">Input</th><th class="num">Weight</th><th class="num">Points</th><th>Why</th></tr></thead>
+      <tbody>
+      {% for f in idea.breakdown.factors %}
+        <tr><td>{{ f.label }}</td><td class="num">{{ f.input }}/10</td><td class="num">{{ f.weight }}</td>
+            <td class="num"><b>{{ f.points }}</b></td><td class="small muted">{{ f.explanation }}</td></tr>
+      {% endfor %}
+      </tbody>
+      <tfoot><tr><td colspan="3">Total (rounded)</td><td class="num"><b>{{ idea.score }}</b></td><td class="small muted">{{ idea.breakdown.formula }}</td></tr></tfoot>
+    </table>
+    {% endif %}
+  </section>
+
+  <section id="pipeline">
+    <div class="row-between">
+      <h2>Production pipeline</h2>
+      {% if not tasks and idea.status in ('draft', 'in_production') %}
+        <form method="post" action="{{ url_for('orchestrate', idea_id=idea.id) }}"><button>Start production (Orchestrator)</button></form>
+      {% elif tasks and idea.status == 'in_production' %}
+        <form method="post" action="{{ url_for('advance', idea_id=idea.id) }}"><button class="secondary">Re-run Orchestrator</button></form>
+      {% endif %}
+    </div>
+    {% if tasks %}
+    <ol class="pipeline">
+    {% for t in tasks %}
+      <li class="task t-{{ t.status }}">
+        <div class="row-between">
+          <div><b>{{ t.agent_name }}</b> <span class="agent a-{{ t.agent_status }}">{{ t.agent_status }}</span>
+               <span class="muted small">· {{ t.phase|replace('_',' ') }}</span></div>
+          {{ badge(t.status) }}
+        </div>
+        <div class="small">{{ t.description }}</div>
+        {% if t.output %}<pre class="small">{{ t.output }}</pre>{% endif %}
+        {% if t.status == 'manual_required' %}
+          <form method="post" action="{{ url_for('complete_task', task_id=t.id) }}" class="inline-form">
+            <input name="completed_by" placeholder="Your name" required aria-label="Completed by">
+            <input name="notes" placeholder="Notes / link to file (optional)" aria-label="Notes">
+            <button>Mark done</button>
+          </form>
+        {% endif %}
+      </li>
+    {% endfor %}
+    </ol>
+    {% else %}<p class="muted">Not started. The Orchestrator will create one task per agent step.</p>{% endif %}
+  </section>
+
+  <section id="review">
+    <h2>Human review</h2>
+    {% if idea.status in ('ready_for_review', 'approved') %}
+      <form method="post" action="{{ url_for('review', idea_id=idea.id) }}" class="box">
+        <div class="grid2">
+          <label>Reviewer name <input name="reviewer" required></label>
+          <label>Decision
+            <select name="decision">
+              <option value="approved">Approve</option>
+              <option value="changes_requested">Request changes</option>
+              <option value="rejected">Reject</option>
+            </select>
+          </label>
+        </div>
+        <label>Notes <input name="notes"></label>
+        <button>Record decision</button>
+      </form>
+    {% elif idea.status in ('published', 'rejected', 'archived') %}
+      <p class="muted">Review closed (idea is {{ idea.status }}).</p>
+    {% else %}
+      <p class="muted">Review opens when every production step is done (status “ready for review”).</p>
+    {% endif %}
+    {% if approvals %}
+      <ul class="plain small">{% for a in approvals %}
+        <li>{{ badge(a.decision) }} by <b>{{ a.reviewer }}</b> <span class="muted">{{ a.created_at[:16]|replace('T',' ') }}</span> {{ a.notes }}</li>
+      {% endfor %}</ul>
+    {% endif %}
+  </section>
+
+  <section id="publish">
+    <h2>Mark as published</h2>
+    {% if idea.status == 'published' %}
+      <p>Published on <b>{{ PLATFORMS.get(idea.published_platform, idea.published_platform) }}</b> by {{ idea.published_by }}
+         · {{ idea.published_at[:16]|replace('T',' ') }}
+         {% if idea.published_url %}· <a href="{{ idea.published_url }}" rel="noopener noreferrer" target="_blank">post link</a>{% endif %}</p>
+    {% elif ready %}
+      <form method="post" action="{{ url_for('publish', idea_id=idea.id) }}" class="box">
+        <p class="small">This tool never posts. Post it yourself, then record it here.</p>
+        <div class="grid2">
+          <label>Posted by <input name="confirmed_by" required></label>
+          <label>Platform
+            <select name="platform">{% for p in idea.target_platforms_list %}<option value="{{ p }}">{{ PLATFORMS[p] }}</option>{% endfor %}</select>
+          </label>
+        </div>
+        <label>Post URL <input name="published_url" type="url" placeholder="https://"></label>
+        <label class="inline"><input type="checkbox" name="confirm_manual_post" value="yes" required> I confirm a person has already posted this manually.</label>
+        <button>Record as published</button>
+      </form>
+    {% else %}
+      <div class="gate">
+        <b>Publishing is locked.</b>
+        <ul>{% for r in reasons %}<li>{{ r }}</li>{% endfor %}</ul>
+      </div>
+    {% endif %}
+  </section>
+</div>
+
+<aside>
+  <section id="rights">
+    <h2>Footage rights</h2>
+    {% if not idea.needs_external_footage %}
+      <p class="small muted">Marked as our own footage only. Tick “uses footage we did not shoot” below if that changes.</p>
+    {% endif %}
+    {% if linked %}
+      <ul class="plain">{% for s in linked %}
+        <li>{{ badge(s.effective_status) }} {{ s.source_name }}
+          <form method="post" action="{{ url_for('unlink_source', idea_id=idea.id, source_id=s.id) }}" class="inline-form"><button class="link">unlink</button></form>
+        </li>
+      {% endfor %}</ul>
+    {% elif idea.needs_external_footage %}<p class="small">No sources linked yet.</p>{% endif %}
+    {% if available %}
+      <form method="post" action="{{ url_for('link_source', idea_id=idea.id) }}" class="inline-form">
+        <select name="source_id" aria-label="Source">{% for s in available %}<option value="{{ s.id }}">{{ s.source_name }} ({{ s.effective_status }})</option>{% endfor %}</select>
+        <button class="secondary">Link</button>
+      </form>
+    {% endif %}
+    <p class="small"><a href="{{ url_for('rights_page') }}">Add or update sources →</a></p>
+  </section>
+
+  {% if idea.status not in ('published', 'archived') %}
+  <section>
+    <details>
+      <summary>Edit idea &amp; scoring inputs</summary>
+      <form method="post" action="{{ url_for('update_idea', idea_id=idea.id) }}">
+        {% set i = idea %}
+        {% include "_idea_fields.html" %}
+        <button>Save changes</button>
+      </form>
+    </details>
+    <form method="post" action="{{ url_for('archive', idea_id=idea.id) }}" onsubmit="return confirm('Archive this idea?')">
+      <button class="link danger">Archive idea</button>
+    </form>
+  </section>
+  {% endif %}
+</aside>
+</div>
+{% endblock %}

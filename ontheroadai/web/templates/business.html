@@ -1,0 +1,87 @@
+{% extends "base.html" %}
+{% block title %}{{ b.name }}{% endblock %}
+{% block content %}
+<h1>{{ b.name }}</h1>
+<p class="muted">{{ b.description }}</p>
+
+<section>
+  <div class="row-between">
+    <h2>Ideas <span class="muted small">ranked by opportunity score</span></h2>
+    <form method="get" class="inline-form">
+      <select name="status" onchange="this.form.submit()" aria-label="Filter by status">
+        <option value="">All active</option>
+        {% for s in ['draft','in_production','ready_for_review','approved','rejected','published','archived'] %}
+          <option value="{{ s }}" {{ 'selected' if status == s }}>{{ s|replace('_',' ') }}</option>
+        {% endfor %}
+      </select>
+      <noscript><button>Filter</button></noscript>
+    </form>
+  </div>
+  {% if ideas %}
+  <table>
+    <thead><tr><th class="num">Score</th><th>Idea</th><th>Type</th><th>Brand</th><th>Platforms</th><th>Status</th></tr></thead>
+    <tbody>
+    {% for i in ideas %}
+      <tr>
+        <td class="num"><span class="score">{{ i.score }}</span>{% if i.breakdown and i.breakdown.rights_hold %} <span class="badge s-blocked" title="Footage rights not cleared">rights</span>{% endif %}</td>
+        <td><a href="{{ url_for('idea_detail', idea_id=i.id) }}">{{ i.title }}</a>
+            {% if i.hook %}<div class="small muted">{{ i.hook }}</div>{% endif %}</td>
+        <td class="small">{{ content_types.get(i.content_type, i.content_type) }}</td>
+        <td class="small">{{ i.brand_name or '—' }}</td>
+        <td class="small">{% for p in i.target_platforms_list %}{{ PLATFORMS[p] }}{{ ', ' if not loop.last }}{% else %}—{% endfor %}</td>
+        <td>{{ badge(i.status) }}</td>
+      </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+  {% else %}<p class="muted">No ideas{{ ' with this status' if status }} yet.</p>{% endif %}
+</section>
+
+<section id="new-idea">
+  <h2>Submit an idea</h2>
+  <form method="post" action="{{ url_for('create_idea', slug=b.slug) }}" class="box">
+    {% set i = None %}
+    {% include "_idea_fields.html" %}
+    <button type="submit">Save &amp; score idea</button>
+  </form>
+</section>
+
+{% if open_tasks %}
+<section>
+  <h2>Tasks waiting on a person</h2>
+  <ul class="plain">{% for t in open_tasks %}
+    <li>{{ badge(t.status) }} <b>{{ t.agent_name }}</b> · <a href="{{ url_for('idea_detail', idea_id=t.idea_id) }}">{{ t.idea_title }}</a></li>
+  {% endfor %}</ul>
+</section>
+{% endif %}
+
+<section>
+  <h2>Brands &amp; accounts</h2>
+  <div class="cards">
+  {% for br in brands %}
+    <div class="card">
+      <h3>{{ br.name }} {{ badge(br.status) }}</h3>
+      <p class="small muted">{{ br.positioning }}</p>
+      <ul class="plain small">
+        {% for a in br.accounts %}<li>{{ PLATFORMS[a.platform] }} · {{ a.handle or 'no handle yet' }} · <span class="muted">{{ a.status|replace('_',' ') }}</span></li>{% endfor %}
+      </ul>
+    </div>
+  {% endfor %}
+  </div>
+  <p class="small muted">Accounts are records only. No platform is connected and nothing is posted automatically.</p>
+</section>
+
+<section>
+  <h2>Performance <span class="muted small">(manually entered)</span></h2>
+  {% if summary %}
+  <table>
+    <thead><tr><th>Brand</th><th>Platform</th><th class="num">Entries</th><th class="num">Views</th><th class="num">Engagement</th><th class="num">Follows</th><th class="num">Follows / 1k views</th></tr></thead>
+    <tbody>{% for r in summary %}
+      <tr><td>{{ r.brand_name }}</td><td>{{ PLATFORMS[r.platform] }}</td><td class="num">{{ r.entries }}</td>
+          <td class="num">{{ '{:,}'.format(r.views) }}</td><td class="num">{{ r.engagement_rate if r.engagement_rate is not none else '—' }}%</td>
+          <td class="num">{{ r.follows_gained }}</td><td class="num">{{ r.follows_per_1k_views if r.follows_per_1k_views is not none else '—' }}</td></tr>
+    {% endfor %}</tbody>
+  </table>
+  {% else %}<p class="muted">No performance data yet. <a href="{{ url_for('analytics_page') }}">Enter metrics</a>.</p>{% endif %}
+</section>
+{% endblock %}

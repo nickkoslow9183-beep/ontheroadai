@@ -1,0 +1,74 @@
+{% extends "base.html" %}
+{% block title %}Overview{% endblock %}
+{% block content %}
+<h1>Content operations</h1>
+<div class="cards">
+  {% for c in cards %}
+  <a class="card biz" href="{{ url_for('business', slug=c.slug) }}">
+    <h2>{{ c.name }}</h2>
+    <p class="muted">{{ c.description }}</p>
+    <div class="stats">
+      <div><b>{{ c.total }}</b><span>ideas</span></div>
+      <div><b>{{ c.counts.get('in_production', 0) }}</b><span>in production</span></div>
+      <div><b>{{ c.counts.get('ready_for_review', 0) }}</b><span>awaiting review</span></div>
+      <div><b>{{ c.counts.get('published', 0) }}</b><span>published</span></div>
+    </div>
+  </a>
+  {% endfor %}
+</div>
+
+<section>
+  <h2>Needs a person</h2>
+  {% if open_tasks %}
+  <table>
+    <thead><tr><th>Idea</th><th>Step</th><th>Status</th><th>Why</th></tr></thead>
+    <tbody>
+    {% for t in open_tasks %}
+      <tr>
+        <td><a href="{{ url_for('idea_detail', idea_id=t.idea_id) }}">{{ t.idea_title }}</a></td>
+        <td>{{ t.agent_name }}</td>
+        <td>{{ badge(t.status) }}</td>
+        <td class="muted small">{{ t.output.splitlines()[0] if t.output else t.description }}</td>
+      </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+  {% else %}<p class="muted">Nothing waiting. Start production on an idea to create tasks.</p>{% endif %}
+</section>
+
+<section>
+  <h2>Awaiting human review</h2>
+  {% if review %}
+  <ul class="plain">{% for i in review %}
+    <li><a href="{{ url_for('idea_detail', idea_id=i.id) }}#review">{{ i.title }}</a>
+        <span class="muted">· {{ i.business_name }} · score {{ i.score }}</span></li>
+  {% endfor %}</ul>
+  {% else %}<p class="muted">No ideas are waiting for approval.</p>{% endif %}
+</section>
+
+<section>
+  <h2>Agents</h2>
+  <table>
+    <thead><tr><th>Agent</th><th>Status</th><th>Tasks by state</th></tr></thead>
+    <tbody>
+    {% for key, s in SPECS.items() %}
+      <tr>
+        <td>{{ s.name }}</td>
+        <td><span class="agent a-{{ s.status }}">{{ s.status }}</span></td>
+        <td class="small">{% for st, n in counts.get(key, {}).items() %}{{ badge(st) }} {{ n }} {% else %}<span class="muted">none</span>{% endfor %}</td>
+      </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+  <p class="small muted"><a href="{{ url_for('agents_page') }}">What each agent does today vs. what is planned →</a></p>
+</section>
+
+<section>
+  <h2>Recent activity</h2>
+  {% if activity %}
+  <ul class="plain small">{% for a in activity %}
+    <li><span class="muted">{{ a.created_at[:16]|replace('T', ' ') }}</span> · {{ a.entity }} {{ a.entity_id or '' }} · {{ a.action }} <span class="muted">{{ a.detail }}</span></li>
+  {% endfor %}</ul>
+  {% else %}<p class="muted">No activity yet.</p>{% endif %}
+</section>
+{% endblock %}

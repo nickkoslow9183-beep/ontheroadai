@@ -1,0 +1,61 @@
+{% extends "base.html" %}
+{% block title %}Footage rights{% endblock %}
+{% block content %}
+<h1>Footage rights &amp; permissions</h1>
+<p class="muted">Every piece of footage we did not shoot needs documented permission before it can pass Quality Control or be published.
+  A source can only be marked <b>granted</b> when you record where the proof is.</p>
+
+<section>
+  <h2>Sources</h2>
+  {% if sources %}
+  <table>
+    <thead><tr><th>Source</th><th>Business</th><th>Type</th><th>Status</th><th>Evidence</th><th class="num">Ideas</th><th>Update</th></tr></thead>
+    <tbody>
+    {% for s in sources %}
+      <tr>
+        <td><b>{{ s.source_name }}</b>{% if s.rights_holder %}<div class="small muted">{{ s.rights_holder }}</div>{% endif %}
+            {% if s.source_url %}<div class="small"><a href="{{ s.source_url }}" rel="noopener noreferrer" target="_blank">link</a></div>{% endif %}</td>
+        <td class="small">{{ s.business_name }}</td>
+        <td class="small">{{ SOURCE_TYPES[s.source_type] }}</td>
+        <td>{{ badge(s.effective_status) }}{% if s.expires_on %}<div class="small muted">expires {{ s.expires_on }}</div>{% endif %}</td>
+        <td class="small">{{ s.evidence or '—' }}</td>
+        <td class="num">{{ s.idea_count }}</td>
+        <td>
+          <form method="post" action="{{ url_for('update_source', source_id=s.id) }}" class="stack small">
+            <select name="status" aria-label="Status">{% for st in SOURCE_STATUSES %}<option {{ 'selected' if st == s.status }}>{{ st }}</option>{% endfor %}</select>
+            <input name="evidence" value="{{ s.evidence }}" placeholder="Evidence (required for granted)" aria-label="Evidence">
+            <input name="expires_on" type="date" value="{{ s.expires_on or '' }}" aria-label="Expires on">
+            <button class="secondary">Update</button>
+          </form>
+        </td>
+      </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+  {% else %}<p class="muted">No sources recorded yet.</p>{% endif %}
+</section>
+
+<section>
+  <h2>Record a source</h2>
+  <form method="post" action="{{ url_for('create_source') }}" class="box">
+    <div class="grid2">
+      <label>Business
+        <select name="business_slug">{% for b in nav_businesses %}<option value="{{ b.slug }}">{{ b.name }}</option>{% endfor %}</select>
+      </label>
+      <label>Source name <input name="source_name" required placeholder="e.g. StreamerName — 12 Nov stream VOD"></label>
+      <label>Type
+        <select name="source_type">{% for k, label in SOURCE_TYPES.items() %}<option value="{{ k }}" {{ 'selected' if k == 'unknown' }}>{{ label }}</option>{% endfor %}</select>
+      </label>
+      <label>Permission status
+        <select name="status">{% for st in SOURCE_STATUSES %}<option>{{ st }}</option>{% endfor %}</select>
+      </label>
+      <label>Rights holder <input name="rights_holder"></label>
+      <label>Source URL <input name="source_url" type="url" placeholder="https://"></label>
+      <label>Evidence of permission <input name="evidence" placeholder="e.g. email 2026-11-10 in shared drive /rights/"></label>
+      <label>Expires on <input name="expires_on" type="date"></label>
+    </div>
+    <label>Notes <input name="notes"></label>
+    <button>Save source</button>
+  </form>
+</section>
+{% endblock %}
