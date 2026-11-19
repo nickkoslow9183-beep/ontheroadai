@@ -1,0 +1,36 @@
+{# Manual entry form. Needs: accounts, idea_opts, fields (FIELDS). Optional: next_url #}
+<form method="post" action="{{ url_for('record_analytics') }}" class="box" id="manual-entry">
+  {% if next_url %}<input type="hidden" name="next" value="{{ next_url }}">{% endif %}
+  <p class="small muted">Leave a box empty if the platform doesn't show that number. Empty means "not available";
+    it is never counted as 0.</p>
+  <div class="grid2">
+    <label>Account
+      <select name="account_id" required>
+        {% for a in accounts %}<option value="{{ a.id }}">{{ a.brand_name }} · {{ PLATFORMS[a.platform] }}</option>{% endfor %}
+      </select>
+    </label>
+    <label>Numbers as of <input name="recorded_on" type="date"></label>
+    <label>Title / caption <input name="title" maxlength="300"></label>
+    <label>Post link <input name="post_url" type="url" placeholder="https://"></label>
+    <label>Published (date &amp; time) <input name="published_at" type="datetime-local"></label>
+    <label>Video length (seconds or m:ss) <input name="duration_seconds" inputmode="decimal" placeholder="e.g. 0:32"></label>
+    {% if idea_opts %}
+    <label>Linked idea (optional)
+      <select name="idea_id"><option value="">—</option>{% for i in idea_opts %}<option value="{{ i.id }}">{{ i.title }}</option>{% endfor %}</select>
+    </label>
+    {% endif %}
+    <label>Topic <input name="topic" maxlength="120" placeholder="e.g. rivalry week"></label>
+  </div>
+  <fieldset>
+    <legend>Metrics</legend>
+    <div class="grid3">
+      {% for f in fields if f.kind == 'metric' %}
+        <label>{{ f.label }}
+          <input name="{{ f.key }}" inputmode="decimal"
+                 placeholder="{{ 'm:ss or seconds' if f.value_type == 'duration' else '0–100' if f.value_type == 'percent' else '' }}">
+        </label>
+      {% endfor %}
+    </div>
+  </fieldset>
+  <button>Save numbers</button>
+</form>

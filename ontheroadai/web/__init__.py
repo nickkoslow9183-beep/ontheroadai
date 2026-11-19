@@ -9,6 +9,7 @@ from flask import Flask, abort, flash, g, redirect, render_template, request, ur
 from markupsafe import Markup, escape
 
 from .. import analytics as analytics_mod
+from ..analytics.insights import format_benchmark
 from .. import approvals, ideas, publishing, rights
 from ..agents import SPECS
 from ..agents.orchestrator import Orchestrator
@@ -16,8 +17,7 @@ from ..constants import (BUSINESS_PLATFORMS, CONTENT_TYPES, PLATFORMS, SCORE_INP
                          SOURCE_TYPES)
 from ..db import connect, default_db_path, init_db
 from ..scoring import FACTORS, WEIGHTS
-
-USER_ERRORS = (ValueError, PermissionError, sqlite3.IntegrityError)
+from .helpers import attempt, get_db
 
 
 def create_app(db_path: str | None = None) -> Flask:
@@ -25,16 +25,14 @@ def create_app(db_path: str | None = None) -> Flask:
     app.config["DB_PATH"] = str(db_path or default_db_path())
     # Random per-process key for flash messages only. Never committed.
     app.config["SECRET_KEY"] = os.environ.get("ONTHEROADAI_SECRET_KEY") or os.urandom(32).hex()
+    app.config["MAX_CONTENT_LENGTH"] = 6 * 1024 * 1024  # uploads; CSV import itself caps files at 5 MB
 
     with app.app_context():
         conn = connect(app.config["DB_PATH"])
         init_db(conn)
         conn.close()
 
-    def db() -> sqlite3.Connection:
-        if "db" not in g:
-            g.db = connect(app.config["DB_PATH"])
-        return g.db
+    db = get_db
 
     @app.teardown_appcontext
     def _close(_exc):
@@ -56,17 +54,6 @@ def create_app(db_path: str | None = None) -> Flask:
             return ideas.get_idea(db(), idea_id)
         except LookupError:
             abort(404)
-
-    def attempt(fn, success_msg):
-        try:
-            result = fn()
-            if success_msg:
-                flash(success_msg, "ok")
-            return result
-        except USER_ERRORS as exc:
-            db().rollback()
-            flash(str(exc), "error")
-            return None
 
     @app.template_global()
     def badge(status):
@@ -153,6 +140,10 @@ def create_app(db_path: str | None = None) -> Flask:
             content_types=CONTENT_TYPES[idea["business_slug"]],
             platforms=BUSINESS_PLATFORMS[idea["business_slug"]], brands=brands,
             score_inputs=SCORE_INPUTS, factors=FACTORS,
+            benchmark=format_benchmark(conn, idea["business_slug"], idea["content_type"]),
+            linked_videos=[dict(r) for r in conn.execute(
+                "SELECT v.id, v.title, a.platform FROM videos v JOIN accounts a ON a.id = v.account_id "
+                "WHERE v.idea_id = ?", (idea_id,))],
         )
 
     @app.post("/ideas/<int:idea_id>/update")
@@ -252,32 +243,12 @@ def create_app(db_path: str | None = None) -> Flask:
             "Permission status updated; linked ideas re-scored.")
         return redirect(url_for("rights_page"))
 
-    # ---- analytics ------------------------------------------------------
-    @app.get("/analytics")
-    def analytics_page():
-        conn = db()
-        accounts = [dict(r) for r in conn.execute(
-            "SELECT a.id, a.platform, br.name AS brand_name, b.slug AS business_slug FROM accounts a "
-            "JOIN brands br ON br.id = a.brand_id JOIN businesses b ON b.id = br.business_id ORDER BY b.id, br.id, a.id")]
-        idea_opts = [{"id": i["id"], "title": i["title"], "business_slug": i["business_slug"]}
-                     for i in ideas.list_ideas(conn, status="published")]
-        return render_template("analytics.html", accounts=accounts, idea_opts=idea_opts,
-                               rows=analytics_mod.recent(conn),
-                               summaries={b["slug"]: analytics_mod.summary(conn, b["slug"]) for b in businesses()})
-
-    @app.post("/analytics")
-    def record_analytics():
-        f = request.form
-        attempt(lambda: analytics_mod.record_metrics(
-            db(), int(f.get("account_id") or 0), f.get("recorded_on") or None,
-            idea_id=int(f["idea_id"]) if f.get("idea_id") else None, post_url=f.get("post_url", ""),
-            avg_watch_seconds=f.get("avg_watch_seconds"),
-            **{m: f.get(m, 0) for m in analytics_mod.METRICS}), "Metrics recorded.")
-        return redirect(url_for("analytics_page"))
-
     # ---- agents ---------------------------------------------------------
     @app.get("/agents")
     def agents_page():
         return render_template("agents.html", counts=Orchestrator(db()).status_counts())
 
+    from .analytics_views import register
+
+    register(app)
     return app

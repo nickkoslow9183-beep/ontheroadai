@@ -11,7 +11,10 @@ def test_agent_registry_is_honest():
     statuses = {k: s.status for k, s in SPECS.items()}
     assert statuses["orchestrator"] == "implemented"
     assert statuses["quality_control"] == "partial"
-    planned = {"trend_scout", "analytics_agent", "scriptwriter", "clip_finder", "video_editor",
+    # Milestone 2: the Analytics Agent is implemented (and tested in test_analytics_agent.py).
+    assert statuses["analytics_agent"] == "implemented"
+    assert implementation_for("analytics_agent") is not None
+    planned = {"trend_scout", "scriptwriter", "clip_finder", "video_editor",
                "publishing_coordinator", "growth_optimizer"}
     assert {k for k, v in statuses.items() if v == "planned"} == planned
     for key in planned:
@@ -99,8 +102,10 @@ def test_approve_then_publish_creates_post_publish_tasks(conn):
     idea = ideas.get_idea(conn, idea_id)
     assert idea["status"] == "published" and idea["published_by"] == "Nick"
     post = Orchestrator(conn).tasks(idea_id, phase="post_publish")
-    assert {t["agent_key"]: t["status"] for t in post} == {"analytics_agent": "manual_required",
+    # Milestone 2: the Analytics Agent runs itself and waits (pending) until numbers are imported.
+    assert {t["agent_key"]: t["status"] for t in post} == {"analytics_agent": "pending",
                                                            "growth_optimizer": "manual_required"}
+    assert "Waiting for data" in next(t for t in post if t["agent_key"] == "analytics_agent")["output"]
     with pytest.raises(ValueError):
         ideas.update_idea(conn, idea_id, title="changed after publishing")
 

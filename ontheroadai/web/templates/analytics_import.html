@@ -1,0 +1,46 @@
+{% extends "base.html" %}
+{% block title %}Import CSV · {{ b.name }}{% endblock %}
+{% block content %}
+<p class="small"><a href="{{ url_for('analytics_business', slug=b.slug) }}">← {{ b.name }} analytics</a></p>
+<h1>Import a CSV export: {{ b.name }}</h1>
+
+<section>
+  <h2>Step 1: upload</h2>
+  <form method="post" enctype="multipart/form-data" class="box">
+    <div class="grid2">
+      <label>Which account is this export from?
+        <select name="account_id" required>
+          {% for a in accounts %}<option value="{{ a.id }}">{{ a.brand_name }} · {{ PLATFORMS[a.platform] }}</option>{% endfor %}
+        </select>
+      </label>
+      <label>Numbers as of (the day you downloaded the export)
+        <input type="date" name="captured_on" value="{{ today or '' }}">
+      </label>
+    </div>
+    <label>CSV file (max 5 MB) <input type="file" name="file" accept=".csv,.tsv,.txt,text/csv" required></label>
+    <button>Upload and map columns</button>
+  </form>
+  <p class="small muted">Step 2 shows the file's columns so you can confirm what each one means before anything is saved.</p>
+</section>
+
+<section>
+  <h2>How to get a CSV</h2>
+  <ul class="small">
+    <li>Most platforms let you download post-level analytics from their creator or business tools. Use
+      “Export” or “Download data” and choose CSV. If you only get an Excel file, open it and use File → Save as / Download → CSV.</li>
+    <li>If a platform has no export, copy the numbers into a spreadsheet with one row per video and save it as CSV,
+      or use <a href="{{ url_for('analytics_page') }}#manual-entry">manual entry</a>.</li>
+    <li>Column names differ between platforms and change over time. That's why step 2 lets you match them yourself.
+      Your choices are remembered for files with the same columns.</li>
+    <li>Importing the same file twice is blocked. A newer export of the same videos adds a new dated snapshot, so you
+      can see how the numbers grew.</li>
+  </ul>
+</section>
+
+{% if imports %}
+<section>
+  <h2>Previous imports</h2>
+  {% include "_imports_table.html" %}
+</section>
+{% endif %}
+{% endblock %}

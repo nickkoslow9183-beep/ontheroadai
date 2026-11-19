@@ -1,0 +1,220 @@
+{% extends "base.html" %}
+{% from "_charts.html" import hbar %}
+{% block title %}{{ b.name }} analytics{% endblock %}
+{% block content %}
+<div class="row-between">
+  <h1>{{ b.name }}: analytics</h1>
+  <div>
+    <a class="btn" href="{{ url_for('analytics_import', slug=b.slug) }}">Import CSV</a>
+    <a class="btn secondary" href="{{ url_for('analytics_page') }}#manual-entry">Enter by hand</a>
+  </div>
+</div>
+
+<form method="get" class="filters" aria-label="Filters">
+  {% if brands|length > 1 %}
+  <label>Account
+    <select name="brand_id"><option value="">All</option>
+      {% for br in brands %}<option value="{{ br.id }}" {{ 'selected' if filters.brand_id == br.id|string }}>{{ br.name }}</option>{% endfor %}
+    </select>
+  </label>
+  {% endif %}
+  <label>Platform
+    <select name="platform"><option value="">All</option>
+      {% for p in platforms %}<option value="{{ p }}" {{ 'selected' if filters.platform == p }}>{{ PLATFORMS[p] }}</option>{% endfor %}
+    </select>
+  </label>
+  <label>Format
+    <select name="format"><option value="">All</option>
+      {% for k, label in content_types.items() %}<option value="{{ k }}" {{ 'selected' if filters.format == k }}>{{ label }}</option>{% endfor %}
+      {% for k in extra_formats %}<option value="{{ k }}" {{ 'selected' if filters.format == k }}>{{ k }}</option>{% endfor %}
+      <option value="__untagged__" {{ 'selected' if filters.format == '__untagged__' }}>Untagged</option>
+    </select>
+  </label>
+  <label>Length
+    <select name="length"><option value="">All</option>
+      {% for l in lengths %}<option {{ 'selected' if filters.length == l }}>{{ l }}</option>{% endfor %}
+    </select>
+  </label>
+  <label>Published from <input type="date" name="date_from" value="{{ filters.date_from or '' }}"></label>
+  <label>to <input type="date" name="date_to" value="{{ filters.date_to or '' }}"></label>
+  <div class="filter-actions"><button>Apply</button>{% if filters %} <a href="{{ url_for('analytics_business', slug=b.slug) }}">Clear</a>{% endif %}</div>
+</form>
+
+<div class="kpis">
+  <div class="kpi"><span>Videos</span><b>{{ kpis.videos }}</b><small>{{ kpis.with_data }} with numbers</small></div>
+  <div class="kpi"><span>Views</span><b>{{ kpis.views|num }}</b><small>latest numbers per video</small></div>
+  <div class="kpi"><span>Followers gained</span><b>{{ kpis.follows|num }}</b><small>&nbsp;</small></div>
+  <div class="kpi"><span>Follows per 1,000 views</span><b>{{ kpis.per_1k|num(2) }}</b><small>{{ kpis.per_1k_n }} videos with both numbers</small></div>
+  <div class="kpi"><span>Median share watched</span><b>{{ kpis.median_watch_ratio|pct }}</b><small>{{ kpis.watch_n }} videos with length &amp; watch time</small></div>
+</div>
+
+{% if not videos %}
+<section>
+  <h2>No videos yet</h2>
+  <p>{% if filters %}No videos match these filters. {% endif %}Import a CSV export from {{ b.name }}'s platforms or enter numbers by hand to start.</p>
+</section>
+{% else %}
+
+<section id="recommendations">
+  <h2>Recommendations</h2>
+  <p class="small muted">Generated from the {{ videos|length }} video(s) in this view. Each one shows its evidence and how much data it rests on.</p>
+  <div class="recs">
+  {% for r in recs %}
+    <article class="rec">
+      <h3>{{ r.title }}</h3>
+      <p>{{ r.action }}</p>
+      <ul class="small">{% for e in r.evidence %}<li>{{ e }}</li>{% endfor %}</ul>
+      <p class="small"><span class="badge conf">{{ r.confidence }}</span>{% if r.n %} <span class="muted">based on {{ r.n }} video(s)</span>{% endif %}</p>
+      <p class="small muted">{{ r.caution }}</p>
+    </article>
+  {% endfor %}
+  </div>
+</section>
+
+<section id="conversion">
+  <h2>Follower conversion</h2>
+  <p class="small muted">Follows per 1,000 views = followers gained ÷ views × 1,000, pooled across the videos in each group.
+    Only videos with both numbers count ({{ conversion.usable }} of {{ videos|length }}).</p>
+  <div class="chart-grid">
+    {{ hbar(conversion.by_format, 'pooled_per_1k', 'Follows per 1,000 views by format') }}
+    {{ hbar(conversion.by_platform, 'pooled_per_1k', 'Follows per 1,000 views by platform') }}
+  </div>
+  {% if conversion.by_format %}
+  <table class="sortable">
+    <thead><tr><th>Format</th><th class="num" data-type="num">Videos</th><th class="num" data-type="num">Views</th>
+      <th class="num" data-type="num">Follows</th><th class="num" data-type="num">Follows / 1k (pooled)</th>
+      <th class="num" data-type="num">Median per video</th><th>Sample</th></tr></thead>
+    <tbody>{% for g in conversion.by_format %}
+      <tr><td>{{ g.label }}</td><td class="num" data-v="{{ g.n }}">{{ g.n }}</td><td class="num" data-v="{{ g.views }}">{{ g.views|num }}</td>
+        <td class="num" data-v="{{ g.follows }}">{{ g.follows|num }}</td><td class="num" data-v="{{ g.pooled_per_1k }}"><b>{{ g.pooled_per_1k|num(2) }}</b></td>
+        <td class="num" data-v="{{ g.median_per_1k }}">{{ g.median_per_1k|num(2) }}</td><td class="small muted">{{ g.sample }}</td></tr>
+    {% endfor %}</tbody>
+  </table>
+  {% endif %}
+  {% if conversion.top %}
+    <h3>Best converting videos <span class="muted small">(at least {{ conversion.min_views }} views)</span></h3>
+    <ol class="small">{% for v in conversion.top %}
+      <li><a href="{{ url_for('video_detail', video_id=v.id) }}">{{ v.title or v.post_url or 'Video #' ~ v.id }}</a>:
+        {{ v.follows_per_1k|num(2) }} per 1k · {{ v.views|num }} views · {{ v.format_label }} · {{ v.platform_label }}</li>
+    {% endfor %}</ol>
+  {% endif %}
+</section>
+
+<section id="retention">
+  <h2>Retention</h2>
+  <p class="small muted">“Share watched” = average watch time ÷ video length, so 7 s on a 15 s video (47%) is not treated like
+    7 s on a 60 s video (12%). Each video is compared with videos of similar length
+    (same platform when there are at least 3, otherwise any platform). 1.00× = typical for its length.
+    Available for {{ retention.with_ratio }} of {{ videos|length }} videos
+    {%- if retention.missing_length or retention.missing_watch %} (length missing for {{ retention.missing_length }}, watch time missing for {{ retention.missing_watch }}){% endif %}.</p>
+  <div class="chart-grid">
+    {{ hbar(retention.by_format|selectattr('median_relative', 'ne', none)|list, 'median_relative', 'Retention vs similar-length videos, by format', fmt='x', n_key='n_relative', note='median; 1.00× = typical') }}
+    {{ hbar(retention.by_length, 'median_watch_ratio', 'Median share of video watched, by length', fmt='pct', note='longer videos are naturally lower') }}
+  </div>
+  <div class="grid2">
+    <div>
+      <h3>Losing viewers early ({{ retention.early|length }})</h3>
+      {% if retention.early %}<ul class="plain small">{% for v in retention.early[:8] %}
+        <li><a href="{{ url_for('video_detail', video_id=v.id) }}">{{ v.title or v.post_url or 'Video #' ~ v.id }}</a><br>
+          <span class="muted">{{ v.retention_note }}</span></li>{% endfor %}</ul>
+      {% else %}<p class="small muted">None flagged among videos with comparable data.</p>{% endif %}
+    </div>
+    <div>
+      <h3>Holding attention ({{ retention.strong|length }})</h3>
+      {% if retention.strong %}<ul class="plain small">{% for v in retention.strong[:8] %}
+        <li><a href="{{ url_for('video_detail', video_id=v.id) }}">{{ v.title or v.post_url or 'Video #' ~ v.id }}</a><br>
+          <span class="muted">{{ v.retention_note }}</span></li>{% endfor %}</ul>
+      {% else %}<p class="small muted">None stand out yet.</p>{% endif %}
+    </div>
+  </div>
+  {% if retention.by_format %}
+  <table class="sortable">
+    <thead><tr><th>Format</th><th class="num" data-type="num">Median share watched</th><th class="num" data-type="num">vs similar length</th>
+      <th class="num" data-type="num">Median completion</th><th class="num" data-type="num">Median skip rate</th><th>Sample</th></tr></thead>
+    <tbody>{% for g in retention.by_format %}
+      <tr><td>{{ g.label }}</td>
+        <td class="num" data-v="{{ g.median_watch_ratio }}">{{ g.median_watch_ratio|pct }} <span class="muted small">n={{ g.n_ratio }}</span></td>
+        <td class="num" data-v="{{ g.median_relative }}">{% if g.median_relative is not none %}{{ '%.2f'|format(g.median_relative) }}×{% else %}—{% endif %} <span class="muted small">n={{ g.n_relative }}</span></td>
+        <td class="num" data-v="{{ g.median_completion }}">{{ g.median_completion|num(1) }}{{ '%' if g.median_completion is not none }} <span class="muted small">n={{ g.n_completion }}</span></td>
+        <td class="num" data-v="{{ g.median_skip }}">{{ g.median_skip|num(1) }}{{ '%' if g.median_skip is not none }} <span class="muted small">n={{ g.n_skip }}</span></td>
+        <td class="small muted">{{ g.sample }}</td></tr>
+    {% endfor %}</tbody>
+  </table>
+  {% endif %}
+</section>
+
+<section id="videos">
+  <div class="row-between">
+    <h2>Videos ({{ videos|length }})</h2>
+    <span class="small muted">Click a column header to sort. Tick videos to compare or tag them.</span>
+  </div>
+  <form method="post" action="{{ url_for('analytics_bulk', slug=b.slug) }}" id="video-form">
+    <div class="table-actions">
+      <button type="submit" formmethod="get" formaction="{{ url_for('analytics_compare', slug=b.slug) }}" class="compare-btn" disabled>Compare selected</button>
+      <span class="sep"></span>
+      <label class="inline">Set format
+        <select name="bulk_format"><option value="">—</option>{% for k, label in content_types.items() %}<option value="{{ k }}">{{ label }}</option>{% endfor %}</select></label>
+      <label class="inline">topic <input name="bulk_topic" size="12"></label>
+      <button type="submit" class="secondary bulk-btn" disabled>Apply to selected</button>
+    </div>
+    <div class="table-wrap">
+    <table class="sortable videos">
+      <thead><tr>
+        <th><input type="checkbox" class="select-all" aria-label="Select all"></th>
+        <th data-type="text">Video</th><th data-type="text">Platform</th>
+        {% if brands|length > 1 %}<th data-type="text">Account</th>{% endif %}
+        <th data-type="text">Format</th><th data-type="text">Published</th>
+        <th class="num" data-type="num">Length</th><th class="num" data-type="num">Views</th><th class="num" data-type="num">Reach</th>
+        <th class="num" data-type="num">Follows</th><th class="num" data-type="num">Follows / 1k</th>
+        <th class="num" data-type="num">Eng. %</th><th class="num" data-type="num">Shares</th><th class="num" data-type="num">Saves</th>
+        <th class="num" data-type="num">Avg watch</th><th class="num" data-type="num">Watched</th>
+        <th class="num" data-type="num">vs similar</th><th class="num" data-type="num">Completion</th>
+        <th class="num" data-type="num">Skip</th><th data-type="text">Retention</th><th data-type="text">As of</th>
+      </tr></thead>
+      <tbody>
+      {% for v in videos %}
+        <tr>
+          <td><input type="checkbox" name="ids" value="{{ v.id }}" aria-label="Select {{ v.title or v.id }}"></td>
+          <td data-v="{{ v.title }}"><a href="{{ url_for('video_detail', video_id=v.id) }}">{{ (v.title or v.post_url or 'Video #' ~ v.id)|truncate(48) }}</a>
+            {% if v.idea_title %}<div class="small muted">idea: {{ v.idea_title|truncate(30) }}</div>{% endif %}</td>
+          <td class="small">{{ v.platform_label }}</td>
+          {% if brands|length > 1 %}<td class="small">{{ v.brand_name }}</td>{% endif %}
+          <td class="small">{{ v.format_label }}</td>
+          <td class="small" data-v="{{ v.published_at or '' }}">{{ (v.published_at or '—')|replace('T', ' ') }}</td>
+          <td class="num" data-v="{{ v.duration_seconds }}">{{ v.duration_seconds|num }}{{ 's' if v.duration_seconds }}</td>
+          <td class="num" data-v="{{ v.views }}">{{ v.views|num }}</td>
+          <td class="num" data-v="{{ v.reach }}">{{ v.reach|num }}</td>
+          <td class="num" data-v="{{ v.follows_gained }}">{{ v.follows_gained|num }}</td>
+          <td class="num" data-v="{{ v.follows_per_1k }}"><b>{{ v.follows_per_1k|num(2) }}</b></td>
+          <td class="num" data-v="{{ v.engagement_rate }}">{{ v.engagement_rate|num(2) }}{{ '*' if v.engagement_partial }}</td>
+          <td class="num" data-v="{{ v.shares }}">{{ v.shares|num }}</td>
+          <td class="num" data-v="{{ v.saves }}">{{ v.saves|num }}</td>
+          <td class="num" data-v="{{ v.avg_watch_seconds }}">{{ v.avg_watch_seconds|num(1) }}{{ 's' if v.avg_watch_seconds is not none }}</td>
+          <td class="num" data-v="{{ v.watch_ratio }}">{{ v.watch_ratio|pct }}</td>
+          <td class="num" data-v="{{ v.relative_retention }}">{% if v.relative_retention is not none %}{{ '%.2f'|format(v.relative_retention) }}×{% else %}—{% endif %}</td>
+          <td class="num" data-v="{{ v.completion_rate }}">{{ v.completion_rate|num(1) }}{{ '%' if v.completion_rate is not none }}</td>
+          <td class="num" data-v="{{ v.skip_rate }}">{{ v.skip_rate|num(1) }}{{ '%' if v.skip_rate is not none }}</td>
+          <td data-v="{{ v.retention_flag or '' }}">{% if v.retention_flag == 'early_drop' %}<span class="badge s-blocked" title="{{ v.retention_note }}">loses viewers early</span>
+            {% elif v.retention_flag == 'strong_hold' %}<span class="badge s-done" title="{{ v.retention_note }}">holds attention</span>
+            {% elif v.retention_flag == 'typical' %}<span class="badge">typical</span>
+            {% elif v.retention_flag == 'low_no_peers' %}<span class="badge s-manual_required" title="{{ v.retention_note }}">low, no peers</span>
+            {% else %}<span class="muted small">—</span>{% endif %}</td>
+          <td class="small" data-v="{{ v.captured_on or '' }}">{{ v.captured_on or 'no numbers' }}</td>
+        </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+    </div>
+  </form>
+  <p class="small muted">— = not available (never estimated). * engagement uses only the interactions present in the export.</p>
+</section>
+{% endif %}
+
+{% if imports %}
+<section>
+  <h2>Imports</h2>
+  {% include "_imports_table.html" %}
+</section>
+{% endif %}
+<script src="{{ url_for('static', filename='app.js') }}"></script>
+{% endblock %}

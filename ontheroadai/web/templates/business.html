@@ -72,7 +72,10 @@
 </section>
 
 <section>
-  <h2>Performance <span class="muted small">(manually entered)</span></h2>
+  <div class="row-between">
+    <h2>Performance</h2>
+    <a class="btn" href="{{ url_for('analytics_business', slug=b.slug) }}">Open {{ b.name }} analytics →</a>
+  </div>
   {% if summary %}
   <table>
     <thead><tr><th>Brand</th><th>Platform</th><th class="num">Entries</th><th class="num">Views</th><th class="num">Engagement</th><th class="num">Follows</th><th class="num">Follows / 1k views</th></tr></thead>
@@ -82,6 +85,6 @@
           <td class="num">{{ r.follows_gained }}</td><td class="num">{{ r.follows_per_1k_views if r.follows_per_1k_views is not none else '—' }}</td></tr>
     {% endfor %}</tbody>
   </table>
-  {% else %}<p class="muted">No performance data yet. <a href="{{ url_for('analytics_page') }}">Enter metrics</a>.</p>{% endif %}
+  {% else %}<p class="muted">No performance data yet. <a href="{{ url_for('analytics_import', slug=b.slug) }}">Import a CSV</a> or <a href="{{ url_for('analytics_page') }}#manual-entry">enter numbers</a>.</p>{% endif %}
 </section>
 {% endblock %}

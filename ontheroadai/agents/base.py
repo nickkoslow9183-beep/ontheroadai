@@ -31,6 +31,9 @@ class AgentResult:
     success: bool
     output: str
     problems: list[str] = field(default_factory=list)
+    # True when the agent cannot finish *yet* because it needs data that has not
+    # arrived (e.g. analytics before the export is imported). The task stays pending.
+    waiting: bool = False
 
 
 class Agent(ABC):

@@ -1,0 +1,103 @@
+{% extends "base.html" %}
+{% from "_charts.html" import line %}
+{% block title %}{{ v.title or 'Video' }}{% endblock %}
+{% block content %}
+<p class="small"><a href="{{ url_for('analytics_business', slug=v.business_slug) }}#videos">← {{ v.business_name }} analytics</a></p>
+<h1>{{ v.title or v.post_url or 'Video #' ~ v.id }}</h1>
+<p class="muted">{{ v.brand_name }} · {{ PLATFORMS[v.platform] }}
+  {% if v.post_url %}· <a href="{{ v.post_url }}" target="_blank" rel="noopener noreferrer">open post</a>{% endif %}
+  {% if v.idea_id %}· idea: <a href="{{ url_for('idea_detail', idea_id=v.idea_id) }}">{{ v.idea_title }}</a>{% endif %}</p>
+
+<div class="layout">
+<div>
+  {% if d and d.snapshot_id %}
+  <section>
+    <h2>Latest numbers <span class="muted small">as of {{ d.captured_on }}{% if d.days_since_publish is not none %}, {{ d.days_since_publish }} days after posting{% endif %}</span></h2>
+    <div class="kpis">
+      <div class="kpi"><span>Views</span><b>{{ d.views|num }}</b></div>
+      <div class="kpi"><span>Follows per 1,000 views</span><b>{{ d.follows_per_1k|num(2) }}</b></div>
+      <div class="kpi"><span>Engagement</span><b>{{ d.engagement_rate|num(2) }}{{ '%' if d.engagement_rate is not none }}</b><small>{{ 'partial: some interactions missing' if d.engagement_partial else '&nbsp;'|safe }}</small></div>
+      <div class="kpi"><span>Share watched</span><b>{{ d.watch_ratio|pct }}</b><small>{% if d.relative_retention is not none %}{{ '%.2f'|format(d.relative_retention) }}× similar-length videos{% else %}&nbsp;{% endif %}</small></div>
+    </div>
+    {% if d.retention_note %}<p class="small">Retention: {{ d.retention_note }}{% if d.peer_group %} <span class="muted">(compared with {{ d.peer_group }})</span>{% endif %}.</p>
+    {% elif d.watch_ratio is none %}<p class="small muted">Retention needs both video length and average watch time.</p>
+    {% elif d.relative_retention is none %}<p class="small muted">Not enough similar-length videos to compare retention yet.</p>{% endif %}
+  </section>
+  {% endif %}
+
+  {% set pts = [] %}{% for s in snaps if s.views is not none %}{% set _ = pts.append((s.captured_on, s.views)) %}{% endfor %}
+  {% if pts|length >= 2 %}
+  <section>{{ line(pts, 'Views over time (one point per snapshot)', 'views') }}</section>
+  {% endif %}
+
+  <section id="snapshots">
+    <h2>Snapshots <span class="muted small">(history of this video's numbers)</span></h2>
+    {% if snaps %}
+    <p class="small muted">Fix a number and press Save, or delete a wrong entry. Empty = not available.</p>
+    {% for s in snaps|reverse %}
+      <details class="snap" {{ 'open' if loop.first }}>
+        <summary>{{ s.captured_on }} · {{ s.views|num }} views · {{ s.source }}{% if s.import_id %} (import #{{ s.import_id }}){% endif %}</summary>
+        <form method="post" action="{{ url_for('snapshot_update', snapshot_id=s.id) }}">
+          <div class="grid3">
+            <label>Numbers as of <input type="date" name="captured_on" value="{{ s.captured_on }}"></label>
+            {% for f in fields if f.kind == 'metric' %}
+              <label>{{ f.label }} <input name="{{ f.key }}" value="{{ '' if s[f.key] is none else (s[f.key]|int if f.value_type == 'count' else s[f.key]) }}" inputmode="decimal"></label>
+            {% endfor %}
+          </div>
+          <label>Notes <input name="notes" value="{{ s.notes }}"></label>
+          <button>Save correction</button>
+        </form>
+        <form method="post" action="{{ url_for('snapshot_delete', snapshot_id=s.id) }}" onsubmit="return confirm('Delete this snapshot?')">
+          <button class="link danger">Delete this snapshot</button>
+        </form>
+      </details>
+    {% endfor %}
+    {% else %}<p class="muted">No numbers yet.</p>{% endif %}
+
+    <details>
+      <summary>Add newer numbers by hand</summary>
+      <form method="post" action="{{ url_for('snapshot_add', video_id=v.id) }}">
+        <div class="grid3">
+          <label>Numbers as of <input type="date" name="captured_on"></label>
+          {% for f in fields if f.kind == 'metric' %}<label>{{ f.label }} <input name="{{ f.key }}" inputmode="decimal"></label>{% endfor %}
+        </div>
+        <label>Notes <input name="notes"></label>
+        <button>Add snapshot</button>
+      </form>
+    </details>
+  </section>
+</div>
+
+<aside>
+  <section>
+    <h2>Video details</h2>
+    <form method="post" action="{{ url_for('video_update', video_id=v.id) }}">
+      <label>Title <input name="title" value="{{ v.title }}"></label>
+      <label>Post link <input name="post_url" type="url" value="{{ v.post_url }}"></label>
+      <label>Format
+        <select name="format">
+          <option value="">— untagged —</option>
+          {% for k, label in content_types.items() %}<option value="{{ k }}" {{ 'selected' if v.format == k }}>{{ label }}</option>{% endfor %}
+          {% if v.format and v.format not in content_types %}<option value="{{ v.format }}" selected>{{ v.format }}</option>{% endif %}
+        </select>
+      </label>
+      <label>Topic <input name="topic" value="{{ v.topic }}"></label>
+      <label>Published <input name="published_at" type="datetime-local" value="{{ v.published_at if v.published_at and 'T' in v.published_at else '' }}"></label>
+      {% if v.published_at and 'T' not in v.published_at %}<p class="small muted">Stored date: {{ v.published_at }} (no time in export).</p>{% endif %}
+      <label>Video length (seconds) <input name="duration_seconds" value="{{ v.duration_seconds if v.duration_seconds is not none else '' }}" inputmode="decimal"></label>
+      <label>Linked idea
+        <select name="idea_id"><option value="">—</option>
+          {% for i in ideas %}<option value="{{ i.id }}" {{ 'selected' if v.idea_id == i.id }}>{{ i.title|truncate(40) }} ({{ i.status }})</option>{% endfor %}
+        </select>
+      </label>
+      <button>Save details</button>
+    </form>
+  </section>
+  <section>
+    <form method="post" action="{{ url_for('video_delete', video_id=v.id) }}" onsubmit="return confirm('Delete this video and all its snapshots?')">
+      <button class="link danger">Delete this video and all its numbers</button>
+    </form>
+  </section>
+</aside>
+</div>
+{% endblock %}

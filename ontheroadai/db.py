@@ -174,7 +174,96 @@ WHEN NEW.status IN ('approved', 'published')
 BEGIN
     SELECT RAISE(ABORT, 'New ideas cannot start approved or published');
 END;
+
+-- ===== Milestone 2: performance analytics ==================================
+-- One row per uploaded CSV. raw_content is kept only while the import is
+-- pending (mapping/preview) and cleared once it is completed or discarded.
+CREATE TABLE IF NOT EXISTS analytics_imports (
+    id             INTEGER PRIMARY KEY,
+    account_id     INTEGER NOT NULL REFERENCES accounts(id),
+    filename       TEXT NOT NULL,
+    file_sha256    TEXT NOT NULL,
+    captured_on    TEXT NOT NULL,
+    raw_content    TEXT,
+    header_row     INTEGER NOT NULL DEFAULT 1,
+    mapping_json   TEXT,
+    options_json   TEXT NOT NULL DEFAULT '{}',
+    status         TEXT NOT NULL DEFAULT 'pending'
+                   CHECK (status IN ('pending', 'completed', 'undone', 'discarded')),
+    row_count      INTEGER NOT NULL DEFAULT 0,
+    imported_count INTEGER NOT NULL DEFAULT 0,
+    new_video_count INTEGER NOT NULL DEFAULT 0,
+    duplicate_count INTEGER NOT NULL DEFAULT 0,
+    skipped_count  INTEGER NOT NULL DEFAULT 0,
+    error_count    INTEGER NOT NULL DEFAULT 0,
+    errors_json    TEXT NOT NULL DEFAULT '[]',
+    created_at     TEXT NOT NULL,
+    completed_at   TEXT
+);
+CREATE INDEX IF NOT EXISTS idx_imports_sha ON analytics_imports(file_sha256, status);
+
+-- A published video on one account. video_key is how re-imports find it:
+-- 'id:<platform post id>', 'url:<normalised link>', 'title:<title>|<date>' or 'manual:<random>'.
+CREATE TABLE IF NOT EXISTS videos (
+    id               INTEGER PRIMARY KEY,
+    account_id       INTEGER NOT NULL REFERENCES accounts(id),
+    idea_id          INTEGER REFERENCES ideas(id) ON DELETE SET NULL,
+    video_key        TEXT NOT NULL,
+    external_id      TEXT,
+    post_url         TEXT NOT NULL DEFAULT '',
+    title            TEXT NOT NULL DEFAULT '',
+    topic            TEXT NOT NULL DEFAULT '',
+    format           TEXT NOT NULL DEFAULT '',
+    published_at     TEXT,
+    duration_seconds REAL CHECK (duration_seconds IS NULL OR duration_seconds > 0),
+    created_via      TEXT NOT NULL DEFAULT 'manual'
+                     CHECK (created_via IN ('manual', 'csv', 'publish', 'legacy')),
+    import_id        INTEGER REFERENCES analytics_imports(id) ON DELETE SET NULL,
+    created_at       TEXT NOT NULL,
+    updated_at       TEXT NOT NULL,
+    UNIQUE (account_id, video_key)
+);
+CREATE INDEX IF NOT EXISTS idx_videos_idea ON videos(idea_id);
+
+-- Point-in-time performance. NULL always means "not available"; it is never
+-- replaced by a guess. One snapshot per video per capture date.
+CREATE TABLE IF NOT EXISTS video_snapshots (
+    id                  INTEGER PRIMARY KEY,
+    video_id            INTEGER NOT NULL REFERENCES videos(id) ON DELETE CASCADE,
+    captured_on         TEXT NOT NULL,
+    views               INTEGER CHECK (views IS NULL OR views >= 0),
+    reach               INTEGER CHECK (reach IS NULL OR reach >= 0),
+    likes               INTEGER CHECK (likes IS NULL OR likes >= 0),
+    comments            INTEGER CHECK (comments IS NULL OR comments >= 0),
+    shares              INTEGER CHECK (shares IS NULL OR shares >= 0),
+    saves               INTEGER CHECK (saves IS NULL OR saves >= 0),
+    follows_gained      INTEGER CHECK (follows_gained IS NULL OR follows_gained >= 0),
+    avg_watch_seconds   REAL CHECK (avg_watch_seconds IS NULL OR avg_watch_seconds >= 0),
+    completion_rate     REAL CHECK (completion_rate IS NULL OR completion_rate BETWEEN 0 AND 100),
+    skip_rate           REAL CHECK (skip_rate IS NULL OR skip_rate BETWEEN 0 AND 100),
+    source              TEXT NOT NULL CHECK (source IN ('csv', 'manual', 'legacy')),
+    import_id           INTEGER REFERENCES analytics_imports(id) ON DELETE CASCADE,
+    legacy_analytics_id INTEGER UNIQUE,
+    notes               TEXT NOT NULL DEFAULT '',
+    created_at          TEXT NOT NULL,
+    updated_at          TEXT NOT NULL,
+    UNIQUE (video_id, captured_on)
+);
+CREATE INDEX IF NOT EXISTS idx_snapshots_import ON video_snapshots(import_id);
+
+-- Remembered column mappings, keyed by the exact set of CSV headers.
+CREATE TABLE IF NOT EXISTS mapping_presets (
+    id               INTEGER PRIMARY KEY,
+    header_signature TEXT NOT NULL UNIQUE,
+    name             TEXT NOT NULL,
+    mapping_json     TEXT NOT NULL,
+    options_json     TEXT NOT NULL DEFAULT '{}',
+    created_at       TEXT NOT NULL,
+    updated_at       TEXT NOT NULL
+);
 """
+
+SCHEMA_VERSION = 2
 
 
 def now() -> str:
@@ -196,12 +285,48 @@ def connect(db_path: str | os.PathLike | None = None) -> sqlite3.Connection:
 
 
 def init_db(conn: sqlite3.Connection, seed: bool = True) -> None:
+    """Create or upgrade the database. Safe to run on a Milestone 1 database."""
     conn.executescript(SCHEMA)
     if seed:
         from .seed import seed_reference_data
 
         seed_reference_data(conn)
+    migrate_legacy_analytics(conn)
+    conn.execute(f"PRAGMA user_version = {SCHEMA_VERSION}")
     conn.commit()
+
+
+def migrate_legacy_analytics(conn: sqlite3.Connection) -> int:
+    """Copy Milestone 1 `analytics` rows into videos + snapshots (idempotent).
+
+    The old table is kept untouched; each copied row is remembered by
+    video_snapshots.legacy_analytics_id so it is never copied twice.
+    """
+    rows = conn.execute(
+        "SELECT * FROM analytics WHERE id NOT IN "
+        "(SELECT legacy_analytics_id FROM video_snapshots WHERE legacy_analytics_id IS NOT NULL)"
+    ).fetchall()
+    from .analytics.store import video_key
+
+    for r in rows:
+        ts = now()
+        key = video_key(None, r["post_url"]) or f"legacy:{r['id']}"
+        cur = conn.execute(
+            "INSERT OR IGNORE INTO videos (account_id, idea_id, video_key, post_url, created_via, created_at, "
+            "updated_at) VALUES (?,?,?,?,?,?,?)",
+            (r["account_id"], r["idea_id"], key, r["post_url"], "legacy", ts, ts),
+        )
+        video_id = cur.lastrowid if cur.rowcount else conn.execute(
+            "SELECT id FROM videos WHERE account_id = ? AND video_key = ?", (r["account_id"], key)).fetchone()[0]
+        # INSERT OR IGNORE: two old rows for the same link on the same date keep the first
+        conn.execute(
+            "INSERT OR IGNORE INTO video_snapshots (video_id, captured_on, views, likes, comments, shares, saves, "
+            "follows_gained, avg_watch_seconds, source, legacy_analytics_id, created_at, updated_at) "
+            "VALUES (?,?,?,?,?,?,?,?,?,'legacy',?,?,?)",
+            (video_id, r["recorded_on"], r["views"], r["likes"], r["comments"], r["shares"], r["saves"],
+             r["follows_gained"], r["avg_watch_seconds"], r["id"], ts, ts),
+        )
+    return len(rows)
 
 
 def log(conn: sqlite3.Connection, entity: str, entity_id: int | None, action: str, detail: str = "") -> None:

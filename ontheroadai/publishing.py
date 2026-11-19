@@ -57,5 +57,7 @@ def mark_published(conn: sqlite3.Connection, idea_id: int, confirmed_by: str, pl
     log(conn, "idea", idea_id, "marked published (manual post)", f"{platform} by {confirmed_by}")
     conn.commit()
     from .agents.orchestrator import Orchestrator
+    from .analytics.store import link_published_idea
 
+    link_published_idea(conn, idea_id)
     Orchestrator(conn).on_published(idea_id)

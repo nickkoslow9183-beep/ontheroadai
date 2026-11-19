@@ -1,0 +1,17 @@
+<table>
+  <thead><tr><th>#</th><th>File</th><th>Account</th><th>Numbers as of</th><th>Status</th>
+    <th class="num">Rows</th><th class="num">Imported</th><th class="num">Duplicates</th><th class="num">Problems</th></tr></thead>
+  <tbody>
+  {% for im in imports %}
+    <tr>
+      <td><a href="{{ url_for('import_detail', import_id=im.id) }}">{{ im.id }}</a></td>
+      <td class="small">{{ im.filename }}</td>
+      <td class="small">{{ im.brand_name }} · {{ PLATFORMS[im.platform] }}</td>
+      <td class="small">{{ im.captured_on }}</td>
+      <td>{{ badge(im.status) }}</td>
+      <td class="num">{{ im.row_count }}</td><td class="num">{{ im.imported_count }}</td>
+      <td class="num">{{ im.duplicate_count }}</td><td class="num">{{ im.error_count }}</td>
+    </tr>
+  {% endfor %}
+  </tbody>
+</table>

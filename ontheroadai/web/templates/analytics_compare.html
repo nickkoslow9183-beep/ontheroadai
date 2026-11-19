@@ -1,0 +1,45 @@
+{% extends "base.html" %}
+{% block title %}Compare videos{% endblock %}
+{% block content %}
+<p class="small"><a href="{{ url_for('analytics_business', slug=b.slug) }}#videos">← {{ b.name }} analytics</a></p>
+<h1>Compare {{ c.videos|length }} videos</h1>
+
+<section>
+  <div class="table-wrap">
+  <table class="compare">
+    <thead><tr><th></th>
+      {% for v in c.videos %}<th><span class="letter">{{ v.letter }}</span> <a href="{{ url_for('video_detail', video_id=v.id) }}">{{ v.display_title|truncate(40) }}</a></th>{% endfor %}
+    </tr></thead>
+    <tbody>
+      {% for label, vals in c.context %}
+        <tr class="ctx"><th>{{ label }}</th>{% for x in vals %}<td class="small">{{ x }}</td>{% endfor %}</tr>
+      {% endfor %}
+      {% for r in c.rows %}
+        <tr><th>{{ r.label }}</th>
+          {% for x in r['values'] %}<td class="num {{ 'best' if loop.index0 in r.best }}">{{ x }}{% if loop.index0 in r.best %} <span class="sr">best</span>{% endif %}</td>{% endfor %}
+        </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  </div>
+  <p class="small muted">Highlighted = best value in that row (for skip rate, lowest is best). — = not available.</p>
+</section>
+
+<div class="grid2">
+  <section>
+    <h2>What the numbers show</h2>
+    <p class="small muted">Observed facts from your data.</p>
+    {% if c.observed %}<ul>{% for o in c.observed %}<li>{{ o }}</li>{% endfor %}</ul>
+    {% else %}<p class="muted">Not enough shared metrics to describe differences.</p>{% endif %}
+  </section>
+  <section>
+    <h2>Possible reasons (not proven)</h2>
+    <p class="small muted">Ideas worth testing. None of these is established by this comparison.</p>
+    <ul>{% for p in c.possible %}<li>{{ p }}</li>{% endfor %}</ul>
+  </section>
+</div>
+<section>
+  <h2>Keep in mind</h2>
+  <ul class="small">{% for x in c.caveats %}<li>{{ x }}</li>{% endfor %}</ul>
+</section>
+{% endblock %}

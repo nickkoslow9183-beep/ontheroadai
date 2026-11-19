@@ -83,6 +83,8 @@ class Orchestrator:
     def advance(self, idea_id: int) -> dict:
         """Run every task that is ready, in order, until something needs a human or is blocked."""
         idea = get_idea(self.conn, idea_id)
+        if idea["status"] == "published":
+            return self.advance_post(idea_id)
         ran, waiting_on = [], None
         for task in self.tasks(idea_id, phase="pre_publish"):
             if task["status"] in FINISHED:
@@ -99,6 +101,10 @@ class Orchestrator:
                 waiting_on = task
                 break
             result = agent.run(self.conn, task, idea)
+            if result.waiting:
+                self._set_task(task["id"], "pending", result.output)
+                waiting_on = task
+                break
             self._set_task(task["id"], "done" if result.success else "blocked", result.output,
                            completed_by=f"agent:{task['agent_key']}" if result.success else None)
             log(self.conn, "task", task["id"], "agent ran", f"{task['agent_key']}: "
@@ -145,6 +151,29 @@ class Orchestrator:
                 self._set_task(t["id"], "manual_required",
                                f"{SPECS[t['agent_key']].name} is not implemented yet. Do this by hand.")
         self.conn.commit()
+        self.advance_post(idea_id)
+
+    def advance_post(self, idea_id: int) -> dict:
+        """Run implemented post-publish agents. They are independent of each other, and the
+        Analytics Agent re-runs (even when already done) so its report reflects the newest numbers."""
+        idea = get_idea(self.conn, idea_id)
+        ran, waiting = [], []
+        for task in self.tasks(idea_id, phase="post_publish"):
+            agent = implementation_for(task["agent_key"])
+            if agent is None or task["status"] in ("skipped", "manual_required", "in_progress"):
+                continue
+            result = agent.run(self.conn, task, idea)
+            if result.waiting:
+                self._set_task(task["id"], "pending", result.output)
+                waiting.append(task["agent_key"])
+            else:
+                self._set_task(task["id"], "done" if result.success else "blocked", result.output,
+                               completed_by=f"agent:{task['agent_key']}" if result.success else None)
+                ran.append(task["agent_key"])
+            log(self.conn, "task", task["id"], "agent ran", f"{task['agent_key']}: "
+                f"{'waiting for data' if result.waiting else 'done' if result.success else 'blocked'}")
+        self.conn.commit()
+        return {"ran": ran, "waiting_on": waiting[0] if waiting else None}
 
     # ---- queries --------------------------------------------------------
     def get_task(self, task_id: int) -> dict:

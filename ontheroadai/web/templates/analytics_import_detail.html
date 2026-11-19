@@ -1,0 +1,121 @@
+{% extends "base.html" %}
+{% block title %}Import #{{ imp.id }}{% endblock %}
+{% block content %}
+<p class="small"><a href="{{ url_for('analytics_business', slug=imp.business_slug) }}">← {{ imp.business_name }} analytics</a></p>
+<div class="row-between">
+  <h1>Import #{{ imp.id }}: {{ imp.filename }}</h1>
+  {{ badge(imp.status) }}
+</div>
+<p class="muted">{{ imp.brand_name }} · {{ PLATFORMS[imp.platform] }} · numbers as of {{ imp.captured_on }}</p>
+
+{% if imp.status == 'pending' %}
+<section>
+  <h2>Step 2: match the columns</h2>
+  <p class="small">For each item, pick the column in your file that holds it, or “not in this file”.
+    Suggestions are <b>{{ source }}</b>. You need at least one way to identify videos (ID, link or title) and at least one metric.
+    Leave anything you're unsure about as “not in this file”: it will be stored as not available, never guessed.</p>
+  <form method="post" class="box">
+    <div class="grid2">
+      <label>Row with the column names
+        <input type="number" name="header_row" min="1" max="20" value="{{ header_row }}">
+        <small class="muted">Change this if your export has title lines above the column names.</small>
+      </label>
+      <div>
+        <label class="inline"><input type="checkbox" name="fraction_percent" value="1" {{ 'checked' if options.get('fraction_percent') }}>
+          Rates are written as fractions (0.45 means 45%)</label>
+        <label class="inline"><input type="checkbox" name="day_first" value="1" {{ 'checked' if options.get('day_first') }}>
+          Dates are day-first (31/12/2026)</label>
+      </div>
+    </div>
+    <div class="table-wrap">
+    <table class="mapping">
+      <thead><tr><th>We track</th><th>Column in your file</th><th>What it means</th></tr></thead>
+      <tbody>
+      {% for f in fields %}
+        <tr class="kind-{{ f.kind }}">
+          <td><b>{{ f.label }}</b><div class="small muted">{{ f.kind }}</div></td>
+          <td>
+            <select name="map_{{ f.key }}" aria-label="Column for {{ f.label }}">
+              <option value="">— not in this file —</option>
+              {% for h in headers %}<option value="{{ h }}" {{ 'selected' if mapping.get(f.key) == h }}>{{ h }}</option>{% endfor %}
+            </select>
+          </td>
+          <td class="small muted">{{ f.help }}</td>
+        </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+    </div>
+    <label>Name for this column layout (remembered for next time) <input name="preset_name" placeholder="e.g. TikTok post export"></label>
+    <div class="row-buttons">
+      <button name="action" value="preview" class="secondary">Preview (nothing is saved)</button>
+      <button name="action" value="import">Import</button>
+      <button name="action" value="discard" class="link danger" formnovalidate>Discard upload</button>
+    </div>
+  </form>
+</section>
+
+<section>
+  <h2>First rows of your file <span class="muted small">({{ row_total }} data rows)</span></h2>
+  <div class="table-wrap">
+  <table class="small">
+    <thead><tr>{% for h in headers %}<th>{{ h }}</th>{% endfor %}</tr></thead>
+    <tbody>{% for r in sample %}<tr>{% for c in r %}<td>{{ c|truncate(40) }}</td>{% endfor %}</tr>{% endfor %}</tbody>
+  </table>
+  </div>
+</section>
+
+{% if plan %}
+<section id="preview">
+  <h2>Preview</h2>
+  <div class="kpis">
+    <div class="kpi"><span>Rows</span><b>{{ plan.counts.rows }}</b></div>
+    <div class="kpi"><span>Will import</span><b>{{ plan.counts.importable }}</b><small>{{ plan.counts.new_videos }} new videos</small></div>
+    <div class="kpi"><span>Duplicates (skipped)</span><b>{{ plan.counts.duplicates }}</b></div>
+    <div class="kpi"><span>Problems (skipped)</span><b>{{ plan.counts.errors }}</b></div>
+    <div class="kpi"><span>Totals rows (skipped)</span><b>{{ plan.counts.skipped }}</b></div>
+  </div>
+  <div class="table-wrap">
+  <table class="small">
+    <thead><tr><th>Line</th><th>Video</th><th>Result</th><th>Details</th></tr></thead>
+    <tbody>{% for r in plan.rows[:200] %}
+      <tr><td>{{ r.line }}</td><td>{{ r.title|truncate(50) }}</td>
+        <td>{% if r.status == 'error' %}<span class="badge s-blocked">problem</span>{% elif r.status == 'duplicate' %}<span class="badge s-manual_required">duplicate</span>{% elif r.status == 'skipped' %}<span class="badge">skipped</span>{% else %}<span class="badge s-done">{{ r.status|replace('_', ' ') }}</span>{% endif %}</td>
+        <td class="muted">{{ r.message }}</td></tr>
+    {% endfor %}</tbody>
+  </table>
+  </div>
+</section>
+{% endif %}
+
+{% else %}
+<section>
+  <h2>Result</h2>
+  <div class="kpis">
+    <div class="kpi"><span>Rows in file</span><b>{{ imp.row_count }}</b></div>
+    <div class="kpi"><span>Imported</span><b>{{ imp.imported_count }}</b><small>{{ imp.new_video_count }} new videos</small></div>
+    <div class="kpi"><span>Duplicates skipped</span><b>{{ imp.duplicate_count }}</b></div>
+    <div class="kpi"><span>Problem rows skipped</span><b>{{ imp.error_count }}</b></div>
+  </div>
+  {% if imp.status == 'completed' %}
+    <p><a class="btn" href="{{ url_for('analytics_business', slug=imp.business_slug) }}">See the analysis →</a></p>
+    <form method="post" action="{{ url_for('import_undo', import_id=imp.id) }}"
+          onsubmit="return confirm('Remove everything this import added? Videos you linked to ideas are kept.')">
+      <button class="secondary">Undo this import</button>
+      <span class="small muted">Removes the numbers this file added, and videos that only existed because of it.</span>
+    </form>
+  {% elif imp.status == 'undone' %}
+    <p class="muted">This import was undone. You can upload the file again if needed.</p>
+  {% endif %}
+  {% if imp.mapping %}
+    <details><summary>Column mapping used</summary>
+      <ul class="small">{% for f in fields if imp.mapping.get(f.key) %}<li>{{ f.label }} ← “{{ imp.mapping[f.key] }}”</li>{% endfor %}</ul>
+    </details>
+  {% endif %}
+  {% if imp.errors %}
+    <h3>Rows that were skipped because of problems</h3>
+    <ul class="small">{% for e in imp.errors %}<li>Line {{ e.line }}: {{ e.message }}</li>{% endfor %}</ul>
+  {% endif %}
+</section>
+{% endif %}
+{% endblock %}

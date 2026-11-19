@@ -1,0 +1,41 @@
+{% extends "base.html" %}
+{% block title %}Analytics{% endblock %}
+{% block content %}
+<h1>Analytics</h1>
+<p class="muted">Upload platform CSV exports or type numbers in, then see what holds attention and what converts
+  viewers into followers. Nothing connects to the platforms and nothing is fetched from the internet.</p>
+
+<div class="cards">
+  {% for c in cards %}
+  <a class="card biz" href="{{ url_for('analytics_business', slug=c.slug) }}">
+    <h2>{{ c.name }} analytics →</h2>
+    <div class="stats">
+      <div><b>{{ c.kpis.videos }}</b><span>videos</span></div>
+      <div><b>{{ c.kpis.views|num }}</b><span>views</span></div>
+      <div><b>{{ c.kpis.follows|num }}</b><span>followers gained</span></div>
+      <div><b>{{ c.kpis.per_1k|num(2) }}</b><span>follows / 1k views</span></div>
+    </div>
+  </a>
+  {% endfor %}
+</div>
+
+<section>
+  <h2>Import a CSV export</h2>
+  <p>
+    {% for c in cards %}<a class="btn" href="{{ url_for('analytics_import', slug=c.slug) }}">Upload for {{ c.name }}</a> {% endfor %}
+  </p>
+</section>
+
+<section>
+  <h2>Enter numbers by hand</h2>
+  {% set next_url = None %}
+  {% include "_manual_entry.html" %}
+</section>
+
+{% if imports %}
+<section>
+  <h2>Recent imports</h2>
+  {% include "_imports_table.html" %}
+</section>
+{% endif %}
+{% endblock %}

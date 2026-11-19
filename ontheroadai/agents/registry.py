@@ -28,13 +28,20 @@ SPECS: dict[str, AgentSpec] = {
             target_milestone="Milestone 3",
         ),
         AgentSpec(
-            "analytics_agent", "Analytics Agent", PLANNED,
+            "analytics_agent", "Analytics Agent", IMPLEMENTED,
             "Turns real post performance into insights.",
-            works_today=(),
-            planned=("CSV import of platform analytics exports",
-                     "Per-format / per-hook performance analysis",
-                     "Feed results back into scoring"),
-            target_milestone="Milestone 2",
+            works_today=(
+                "Imports platform CSV exports with a column-mapping screen (duplicates and bad files rejected)",
+                "Manual entry, correction and deletion of performance snapshots",
+                "Retention analysis against similar-length videos",
+                "Follower conversion (follows per 1,000 views) by format, platform and length",
+                "Side-by-side video comparison separating observed differences from unproven causes",
+                "Data-backed recommendations with sample-size labels",
+                "Post-publish task: reports how a published idea performed once its numbers are imported",
+            ),
+            planned=("Direct platform API sync (only if free and officially supported)",
+                     "Automatically suggest scoring inputs from history"),
+            target_milestone="",
         ),
         AgentSpec(
             "scriptwriter", "Scriptwriter", PLANNED,
@@ -89,4 +96,8 @@ def implementation_for(agent_key: str):
         from .quality_control import QualityControlAgent
 
         return QualityControlAgent()
+    if agent_key == "analytics_agent":
+        from .analytics_agent import AnalyticsAgent
+
+        return AnalyticsAgent()
     return None

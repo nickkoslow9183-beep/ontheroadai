@@ -32,7 +32,7 @@
       <h2>Production pipeline</h2>
       {% if not tasks and idea.status in ('draft', 'in_production') %}
         <form method="post" action="{{ url_for('orchestrate', idea_id=idea.id) }}"><button>Start production (Orchestrator)</button></form>
-      {% elif tasks and idea.status == 'in_production' %}
+      {% elif tasks and idea.status in ('in_production', 'published') %}
         <form method="post" action="{{ url_for('advance', idea_id=idea.id) }}"><button class="secondary">Re-run Orchestrator</button></form>
       {% endif %}
     </div>
@@ -137,6 +137,21 @@
       </form>
     {% endif %}
     <p class="small"><a href="{{ url_for('rights_page') }}">Add or update sources →</a></p>
+  </section>
+
+  <section id="history">
+    <h2>What the data says</h2>
+    {% if benchmark and benchmark.n %}
+      <p class="small">Past <b>{{ benchmark.label }}</b> videos: {{ benchmark.per_1k|num(2) }} follows per 1,000 views
+        ({{ benchmark.n }} videos) vs {{ benchmark.overall_per_1k|num(2) }} for all formats.
+        {% if benchmark.median_relative is not none %}Retention {{ '%.2f'|format(benchmark.median_relative) }}× similar-length videos.{% endif %}</p>
+      <p class="small muted">{{ benchmark.sample }}. Use it to inform the “Follower conversion” slider; the score is not changed automatically.</p>
+    {% else %}
+      <p class="small muted">No performance data for this format yet.</p>
+    {% endif %}
+    {% if linked_videos %}
+      <p class="small">Performance: {% for lv in linked_videos %}<a href="{{ url_for('video_detail', video_id=lv.id) }}">{{ PLATFORMS[lv.platform] }} video</a>{{ ', ' if not loop.last }}{% endfor %}</p>
+    {% endif %}
   </section>
 
   {% if idea.status not in ('published', 'archived') %}
