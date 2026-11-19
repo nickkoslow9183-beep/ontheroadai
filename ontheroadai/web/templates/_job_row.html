@@ -1,0 +1,9 @@
+<tr data-job="{{ j.id }}">
+  <td>#{{ j.id }}</td>
+  <td>{{ j.kind|replace('_', ' ') }}</td>
+  <td class="small">{% if j.recording_id %}<a href="{{ url_for('studio_recording', rid=j.recording_id) }}">{{ (j.recording_title or 'recording')|truncate(30) }}</a>{% endif %}
+    {% if j.draft_id %} · <a href="{{ url_for('studio_draft', did=j.draft_id) }}">draft #{{ j.draft_id }}</a>{% endif %}</td>
+  <td><span class="badge s-{{ j.status }} job-status">{{ JOB_LABELS.get(j.status, j.status) }}</span></td>
+  <td style="min-width:9rem"><progress max="1" value="{{ j.progress }}" class="job-progress"></progress></td>
+  <td class="small job-message">{{ j.message }}{% if j.error and j.status == 'failed' %}<details><summary>error details</summary><pre class="small">{{ j.error[-600:] }}</pre></details>{% endif %}</td>
+</tr>

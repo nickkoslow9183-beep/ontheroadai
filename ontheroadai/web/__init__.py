@@ -20,12 +20,14 @@ from ..scoring import FACTORS, WEIGHTS
 from .helpers import attempt, get_db
 
 
-def create_app(db_path: str | None = None, start_scheduler: bool = False) -> Flask:
+def create_app(db_path: str | None = None, start_scheduler: bool = False, start_worker: bool = False) -> Flask:
     app = Flask(__name__)
     app.config["DB_PATH"] = str(db_path or default_db_path())
     # Random per-process key for flash messages only. Never committed.
     app.config["SECRET_KEY"] = os.environ.get("ONTHEROADAI_SECRET_KEY") or os.urandom(32).hex()
-    app.config["MAX_CONTENT_LENGTH"] = 6 * 1024 * 1024  # uploads; CSV import itself caps files at 5 MB
+    # Per-request limit. Videos arrive in 8 MB chunks (see studio upload), so even multi-GB files never
+    # need a bigger request; CSV import separately caps files at 5 MB.
+    app.config["MAX_CONTENT_LENGTH"] = 16 * 1024 * 1024
 
     with app.app_context():
         conn = connect(app.config["DB_PATH"])
@@ -81,6 +83,8 @@ def create_app(db_path: str | None = None, start_scheduler: bool = False) -> Fla
             review=ideas.list_ideas(conn, status="ready_for_review"),
             counts=orch.status_counts(),
             activity=[dict(r) for r in conn.execute("SELECT * FROM activity_log ORDER BY id DESC LIMIT 15")],
+            studio_review=conn.execute("SELECT COUNT(*) FROM studio_drafts WHERE status = 'needs_review'").fetchone()[0],
+            studio_candidates=conn.execute("SELECT COUNT(*) FROM studio_clips WHERE status = 'candidate'").fetchone()[0],
         )
 
     @app.get("/health")
@@ -251,8 +255,17 @@ def create_app(db_path: str | None = None, start_scheduler: bool = False) -> Fla
     from .analytics_views import register
     from .trends_views import register as register_trends
 
+    from .studio_views import register as register_studio
+
     register(app)
     register_trends(app)
+    register_studio(app)
+    app.config.setdefault("STUDIO_WORKER", None)
+    if start_worker:
+        from ..studio.jobs import Worker
+
+        app.config["STUDIO_WORKER"] = Worker(app.config["DB_PATH"])
+        app.config["STUDIO_WORKER"].start()
     app.config.setdefault("SCHEDULER", None)
     if start_scheduler:
         from ..trends.scheduler import Scheduler

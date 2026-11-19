@@ -270,7 +270,8 @@ def register(app):
 
     @app.errorhandler(413)
     def too_large(_exc):
-        flash("That file is too large. CSV uploads are limited to 5 MB.", "error")
+        flash("That request was too large. CSV uploads are limited to 5 MB; videos must be uploaded from the "
+              "Video Studio page (it sends them in small pieces).", "error")
         return redirect(request.referrer or url_for("analytics_page"))
 
     @app.template_filter("pct")

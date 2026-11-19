@@ -373,7 +373,7 @@ def test_upgrade_from_milestone_2_database(tmp_path):
     c.close()
     c = connect(db)
     init_db(c)
-    assert c.execute("PRAGMA user_version").fetchone()[0] == 3
+    assert c.execute("PRAGMA user_version").fetchone()[0] >= 3  # 4 since Milestone 4
     assert ideas.get_idea(c, iid)["title"] == "Kept idea"
     assert c.execute("SELECT COUNT(*) FROM research_sources WHERE is_builtin = 1").fetchone()[0] >= 16
     c.close()

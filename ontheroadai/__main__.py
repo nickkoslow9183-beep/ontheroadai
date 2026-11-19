@@ -23,6 +23,10 @@ def main(argv=None) -> None:
     run.add_argument("--port", type=int, default=5000)
     run.add_argument("--debug", action="store_true")
     run.add_argument("--no-scheduler", action="store_true", help="Don't run scheduled research while the app is open")
+    studio = sub.add_parser("studio", help="Video Studio from the command line")
+    studio.add_argument("video", help="MP4/MOV/M4V file to add and process (transcribe, find clips)")
+    studio.add_argument("--business", default="on-the-road-media")
+    studio.add_argument("--kind", default="podcast")
     research = sub.add_parser("research", help="Run Trend Scout once (fetches enabled, due sources)")
     research.add_argument("--all", action="store_true", help="Fetch every enabled source now, ignoring intervals")
     args = parser.parse_args(argv)
@@ -36,9 +40,24 @@ def main(argv=None) -> None:
     elif args.command == "run":
         from .web import create_app
 
-        app = create_app(db_path, start_scheduler=not args.no_scheduler and not args.debug)
+        app = create_app(db_path, start_scheduler=not args.no_scheduler and not args.debug,
+                         start_worker=not args.debug)
         print(f"Dashboard: http://{args.host}:{args.port}  (database: {db_path})")
         app.run(host=args.host, port=args.port, debug=args.debug)
+    elif args.command == "studio":
+        from pathlib import Path
+
+        from .studio import jobs, service
+
+        conn = connect(db_path)
+        init_db(conn)
+        rid = service.add_recording(conn, Path(args.video), Path(args.video).name,
+                                    {"business": args.business, "kind": args.kind})
+        for j in jobs.run_until_idle(conn):
+            print(f"  {j['kind']:<10} {j['status']:<12} {j['message']}")
+        for c in service.list_clips(conn, rid):
+            print(f"  clip {c['id']}: {c['start']:.1f}-{c['end']:.1f}s score {c['score']}  {c['hook']}")
+        conn.close()
     elif args.command == "research":
         from .agents.orchestrator import Orchestrator
 

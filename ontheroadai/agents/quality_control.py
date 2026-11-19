@@ -43,6 +43,18 @@ class QualityControlAgent(Agent):
                                      "presents it as unconfirmed.",
             ))
 
+        from ..studio.service import draft_for_idea
+
+        draft = draft_for_idea(conn, idea["id"])
+        if draft is not None:
+            video_ok = draft["qc_status"] in ("pass", "warn") and draft["status"] == "approved"
+            checks.append((
+                "Video draft passed QC and was approved",
+                video_ok,
+                "" if video_ok else f"Draft #{draft['id']} is '{draft['status']}' with QC '{draft['qc_status']}'. "
+                                    "Review it in Video Studio.",
+            ))
+
         earlier = conn.execute(
             "SELECT agent_key, status FROM agent_tasks WHERE idea_id = ? AND phase = 'pre_publish' "
             "AND sequence < ? AND status NOT IN ('done', 'skipped')", (idea["id"], task["sequence"])
@@ -56,5 +68,6 @@ class QualityControlAgent(Agent):
         lines = [f"[{'PASS' if passed else 'FAIL'}] {name}" + (f" - {why}" if why and not passed else "")
                  for name, passed, why in checks]
         failed = [f"{name}: {why}" if why else name for name, passed, why in checks if not passed]
-        lines.append("Note: video/audio quality is NOT inspected yet (planned).")
+        if draft is None:
+            lines.append("Note: no Video Studio draft is linked, so no video file was checked.")
         return AgentResult(success=not failed, output="\n".join(lines), problems=failed)

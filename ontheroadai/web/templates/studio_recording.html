@@ -1,0 +1,95 @@
+{% extends "base.html" %}
+{% block title %}{{ rec.title }}{% endblock %}
+{% block content %}
+<h1>Video Studio</h1>
+{% include "_studio_nav.html" %}
+<div class="row-between">
+  <h2 class="page-title">{{ rec.title }} {{ badge(rec.status) }}</h2>
+  <form method="post" action="{{ url_for('studio_recording_action', rid=rec.id, action='delete') }}"
+        onsubmit="return confirm('Delete this recording, its transcript, clips and drafts from this computer?')">
+    <button class="link danger">Delete recording &amp; files</button></form>
+</div>
+<p class="muted small">{{ STUDIO_KINDS.get(rec.kind) }} · {{ rec.duration|tc }} · {{ rec.width }}x{{ rec.height }} @ {{ rec.fps }} fps ·
+  {{ rec.video_codec }}/{{ rec.audio_codec or 'no audio' }} · {{ '%.0f'|format(rec.size_bytes / 1e6) }} MB · {{ rec.original_filename }}</p>
+
+{% if rec.ownership == 'third_party' %}
+<section class="{{ 'gate' if not rights_row or rights_row.status != 'granted' }}">
+  <b>Third-party footage from {{ rec.creator }}.</b>
+  Permission: {{ badge(rights_row.status if rights_row else 'unknown') }}.
+  {% if not rights_row or rights_row.status != 'granted' %}Rendering is blocked until written permission is recorded in
+    <a href="{{ url_for('rights_page') }}">Footage rights</a>. Nothing is downloaded or reused automatically.{% endif %}
+</section>
+{% endif %}
+
+<div class="layout">
+<div>
+  <section>
+    <video class="source-video" src="{{ url_for('studio_media_recording', rid=rec.id) }}" controls preload="metadata"></video>
+  </section>
+
+  <section id="clips">
+    <div class="row-between"><h2>Clip candidates ({{ clips|length }})</h2>
+      <form method="post" action="{{ url_for('studio_recording_action', rid=rec.id, action='find') }}" class="inline-form">
+        <select name="preset" aria-label="Preset">{% for k, p in CLIP_PRESETS.items() %}<option value="{{ k }}">{{ p.label }}</option>{% endfor %}</select>
+        <button class="secondary">Find clips again</button></form></div>
+    {% if clips %}
+    <div class="clips">
+    {% for c in clips %}
+      <article class="clipcard {{ 'is-rejected' if c.status == 'rejected' }}">
+        <div class="row-between">
+          <div><span class="score">{{ c.score if c.score is not none else '—' }}</span>
+            <b><a href="{{ url_for('studio_clip', cid=c.id) }}">{{ c.title or 'Untitled clip' }}</a></b></div>
+          <span>{{ badge(c.status) }} <span class="small muted">{{ c.origin }}</span></span>
+        </div>
+        <p class="small"><b>{{ c.start|tc }} → {{ c.end|tc }}</b> ({{ '%.0f'|format(c.duration) }}s) · {{ c.category }} · preset {{ CLIP_PRESETS[c.preset].label }}</p>
+        {% if c.hook %}<p class="small">Hook: “{{ c.hook }}”</p>{% endif %}
+        <p class="small muted excerpt">{{ c.excerpt|truncate(260) }}</p>
+        {% if c.context_flags %}<ul class="small flags">{% for fl in c.context_flags %}<li>⚠ {{ fl }}</li>{% endfor %}</ul>{% endif %}
+        <div class="row-buttons">
+          <a class="btn" href="{{ url_for('studio_clip', cid=c.id) }}">Edit &amp; render</a>
+          <form method="post" action="{{ url_for('studio_clip_save', cid=c.id) }}"><input type="hidden" name="next" value="{{ request.path }}#clips">
+            <button name="action" value="{{ 'restore' if c.status == 'rejected' else 'reject' }}" class="link">{{ 'Restore' if c.status == 'rejected' else 'Reject' }}</button></form>
+        </div>
+      </article>
+    {% endfor %}
+    </div>
+    {% else %}<p class="muted">No candidates yet. They appear after transcription (or add one by hand below).</p>{% endif %}
+    <form method="post" action="{{ url_for('studio_recording_action', rid=rec.id, action='manual_clip') }}" class="inline-form">
+      <b class="small">Add a clip by hand:</b>
+      <label class="small">start (s) <input name="start" type="number" step="0.01" min="0" required style="width:6rem"></label>
+      <label class="small">end (s) <input name="end" type="number" step="0.01" min="0" required style="width:6rem"></label>
+      <button class="secondary">Add</button></form>
+  </section>
+</div>
+<aside>
+  <section>
+    <h2>Transcript</h2>
+    {% if t %}
+      <p class="small">{{ t.segments|length }} lines · source: {{ t.source }}{% if t.model %} ({{ t.model }}){% endif %} ·
+        word timings: {{ 'yes' if t.word_timings else 'no (line timing only)' }}{% if t.edited %} · edited{% endif %}</p>
+      <p><a class="btn secondary" href="{{ url_for('studio_transcript', rid=rec.id) }}">Review &amp; correct transcript</a></p>
+    {% else %}<p class="small muted">No transcript yet.</p>{% endif %}
+    <details {{ 'open' if not t }}><summary class="small">Transcribe again or import a transcript</summary>
+      <form method="post" action="{{ url_for('studio_recording_action', rid=rec.id, action='transcribe') }}" class="stack small">
+        <select name="model">{% for k, d in WHISPER_MODELS.items() %}<option value="{{ k }}">{{ k }}: {{ d }}</option>{% endfor %}</select>
+        <button class="secondary">Transcribe with Whisper (local)</button></form>
+      <form method="post" action="{{ url_for('studio_recording_action', rid=rec.id, action='import') }}" enctype="multipart/form-data" class="stack small">
+        <input type="file" name="file" accept=".srt,.vtt,.json">
+        <button class="secondary">Import .srt / .vtt / .json</button>
+        <span class="muted">Imported subtitles have line timing only, so word-level captions need Whisper.</span></form>
+    </details>
+  </section>
+  <section>
+    <h2>Drafts</h2>
+    {% if drafts %}<ul class="plain small">{% for d in drafts %}
+      <li><a href="{{ url_for('studio_draft', did=d.id) }}">#{{ d.id }} {{ d.clip_title|truncate(28) }} v{{ d.version }}</a> {{ badge(d.status) }}</li>{% endfor %}</ul>
+    {% else %}<p class="small muted">None yet.</p>{% endif %}
+  </section>
+  <section>
+    <h2>Jobs</h2>
+    <table class="jobs small" data-poll="{{ url_for('studio_jobs_json') }}"><tbody>{% for j in jobs %}{% include "_job_row.html" %}{% endfor %}</tbody></table>
+  </section>
+</aside>
+</div>
+<script src="{{ url_for('static', filename='studio.js') }}"></script>
+{% endblock %}

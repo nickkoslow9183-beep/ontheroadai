@@ -46,7 +46,8 @@ class Orchestrator:
     def _create_tasks(self, idea: dict, phase: str, steps: list[Step]) -> None:
         ts = now()
         for seq, step in enumerate(steps, start=1):
-            skipped = step.only_if_external_footage and not idea["needs_external_footage"]
+            has_draft = self.conn.execute("SELECT 1 FROM studio_drafts WHERE idea_id = ?", (idea["id"],)).fetchone()
+            skipped = step.only_if_external_footage and not idea["needs_external_footage"] and not has_draft
             self.conn.execute(
                 "INSERT OR IGNORE INTO agent_tasks (idea_id, agent_key, task_type, phase, sequence, description, "
                 "status, output, created_at, updated_at) VALUES (?,?,?,?,?,?,?,?,?,?)",
@@ -190,6 +191,26 @@ class Orchestrator:
         log(self.conn, "orchestrator", None, "research run routed to Trend Scout", f"run #{run_id} ({trigger})")
         self.conn.commit()
         return run_id
+
+    # ---- video studio ---------------------------------------------------
+    def studio_process_recording(self, recording_id: int, model: str | None = None) -> int:
+        """Clip discovery: inspect -> transcribe -> find clips (each step queues the next)."""
+        from ..studio.jobs import enqueue
+
+        job = enqueue(self.conn, "inspect", recording_id=recording_id, params={"model": model} if model else {})
+        log(self.conn, "orchestrator", recording_id, "recording routed to Clip Finder", f"job #{job}")
+        self.conn.commit()
+        return job
+
+    def studio_render(self, draft_id: int) -> int:
+        """Editing: render -> QC; the draft then waits in the approval queue for a person."""
+        from ..studio.jobs import enqueue
+
+        d = self.conn.execute("SELECT * FROM studio_drafts WHERE id = ?", (draft_id,)).fetchone()
+        job = enqueue(self.conn, "render", recording_id=d["recording_id"], clip_id=d["clip_id"], draft_id=draft_id)
+        log(self.conn, "orchestrator", draft_id, "draft routed to Video Editor", f"job #{job}")
+        self.conn.commit()
+        return job
 
     # ---- queries --------------------------------------------------------
     def get_task(self, task_id: int) -> dict:

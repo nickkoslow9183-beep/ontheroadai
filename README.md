@@ -4,7 +4,7 @@ A local content operations system for **On The Road Media** (sports content) and
 **GTA 6 Content Network**. It runs on your own computer with Python and SQLite. It has no
 paid services and no platform logins, and it **never posts anything automatically**.
 
-> **Status: Milestone 3.**
+> **Status: Milestone 4.**
 > - From Milestone 1: idea management, transparent scoring, footage-rights tracking,
 >   orchestration and human approval.
 > - New in Milestone 2: a working **Analytics Agent**. It handles CSV import with column
@@ -13,7 +13,10 @@ paid services and no platform logins, and it **never posts anything automaticall
 > - New in Milestone 3: a working **Trend Scout**. It reads real public sports and gaming
 >   feeds, then groups, verifies, scores and turns stories into content recommendations
 >   (see [Trend Scout](#trend-scout-milestone-3)).
-> - Five agents are still *planned*, and the dashboard says so (see [Agents](#the-nine-agents)).
+> - New in Milestone 4: a working **Video Studio**. Upload a podcast, transcribe it locally, find clip
+>   moments, render real 1080x1920 MP4 drafts with captions, run video QC, then approve
+>   (see [Video Studio](#video-studio-milestone-4)).
+> - Three agents are still *planned*, and the dashboard says so (see [Agents](#the-nine-agents)).
 
 ## Start it (no typing needed)
 
@@ -38,6 +41,126 @@ pip install -r requirements.txt
 python -m ontheroadai run            # http://127.0.0.1:5000
 ```
 </details>
+
+## Video Studio (Milestone 4)
+
+Open **Video Studio** in the top menu. The whole workflow runs in your browser, on your own computer.
+
+1. **Upload recording.** Choose an MP4, MOV or M4V file (up to 20 GB) and say what it is (podcast,
+   sports story, gameplay, or someone else's footage).
+   - The file is sent in 8 MB pieces with a progress bar, so large files never have to fit in memory.
+   - FFmpeg checks the real video and audio streams. The file extension alone isn't trusted.
+   - Uploading the exact same file twice is refused.
+2. **Processing jobs** run in the background, one at a time, so the dashboard stays usable.
+   - The steps are inspect → transcribe → find clips.
+   - Each shows Queued / Processing / Needs review / Failed / Completed, with progress and error details.
+   - Jobs interrupted by closing the app restart automatically next time, up to 2 attempts.
+3. **Transcript.** Transcription runs locally with **faster-whisper** (open source, CPU, int8).
+   - You get word-level timestamps, and low-confidence words are underlined so you can check them.
+   - Correct any line. If you change a line's words, its word timings are removed; they are never
+     re-guessed.
+   - Speakers are **not** detected automatically, because both hosts share one audio track. You can
+     label lines "Left host" / "Right host" by hand.
+   - If transcription can't run, import an `.srt`, `.vtt` or `.json` transcript instead. Those have
+     line-level timing only.
+4. **Clip candidates.** The Clip Finder scores moments 0–100 and explains every point. Factors:
+   - opening hook, debate/opinion and energy;
+   - story or game structure;
+   - pacing and dead air;
+   - whether the clip makes sense on its own, and whether it reaches its payoff;
+   - length fit (from your analytics when there's enough data);
+   - topical match with Trend Scout research.
+
+   Rules it follows:
+   - It never starts a clip mid-sentence ("and…", "but…") and never runs across a topic change
+     ("next segment").
+   - It ends on the end of a thought. It runs past the target length rather than cutting off the payoff.
+   - It flags context problems, such as a clip that starts with "he/they" or refers to "like I said earlier".
+5. **Clip editor.** Adjust start and end (or click "start here / end here" on transcript lines), and pick
+   the layout:
+   - **Focus left host / Focus right host / Center / Manual position** (a 9:16 crop);
+   - **Center both** (the whole frame over a blurred background);
+   - **Top/bottom split** (left host on top, right host below).
+
+   **Framing changes** switch the layout at chosen moments, for example left host for the question,
+   right host for the answer. A box over the video previews the crop. Framing is **manual**: there is
+   no automatic speaker tracking. Also in the editor:
+   - **Captions:** font (from the fonts installed on your computer), size, colours, outline, position
+     and a word highlight. Captions appear exactly when each word is spoken (from real word timings),
+     never before.
+   - **Text overlays:** for example a 4-level draft "board" that keeps all four levels on screen and
+     reveals each pick only at the moment it's actually said. If a phrase isn't found in the
+     transcript, QC reports it instead of guessing.
+   - **Tighten pauses:** cuts detected silences longer than 0.7 s. Speech is never cut.
+   - **Presets:** Clean podcast Reel, Sports storytelling Reel (puts the hook on screen for 3 s),
+     GTA gameplay clip.
+6. **Video drafts.** Rendering produces a real **MP4 (H.264 + AAC), 1080x1920, 9:16**, loudness-normalised,
+   with fast start. Preview it in the browser and **Download MP4**.
+7. **Quality control** runs automatically on every draft:
+   - the file opens, every frame decodes, and there's an audio track;
+   - 1080x1920 at 9:16, and the expected duration;
+   - black frames, long silences, and clipping or unusual loudness;
+   - missing captions and caption timing (too early, too short, too long, overlapping);
+   - web-ready fast start.
+
+   Each problem comes with a suggested fix. Passing QC doesn't mean a video is good. That's your call.
+8. **Approval queue.**
+   - Approving needs your name. QC failures block approval, and QC warnings need a tick to confirm
+     you've reviewed them.
+   - Someone else's footage can't be rendered at all until written permission is recorded in
+     Footage rights.
+   - An approved draft can be sent into the idea pipeline. Clip Finder, Video Editor and Quality
+     Control then complete their steps from the real draft, publishing still needs the normal human
+     approval, and **you post it yourself**.
+
+**GTA 6 footage** uses the same engine with the "GTA gameplay clip" preset. Clip finding uses speech
+only: visual moments without talking (chases, crashes) are **not** detected, so mark those by hand.
+Streamer footage is never treated as cleared.
+
+### Where files are stored
+
+Everything stays on your computer in `data/media/` inside the project folder (set `ONTHEROADAI_MEDIA`
+to use another folder, such as an external drive):
+
+```
+data/media/uploads/      partial uploads (deleted when finished or after 24 h)
+data/media/recordings/   the original files
+data/media/work/         temporary audio (deleted after transcription) + detected pauses
+data/media/drafts/       rendered MP4 drafts and their caption files
+```
+
+This folder is **git-ignored**. Videos, audio, transcripts and drafts are never committed to GitHub.
+**Delete recording** removes all of its files. In a temporary cloud workspace (like the one this
+was built in), everything in this folder is gone when the workspace is deleted. Keep your real
+recordings and drafts on your own PC or a backup drive.
+
+### Installing FFmpeg
+
+The Video Studio needs **FFmpeg** (free). Everything else works without it.
+- **Windows:** `Start OnTheRoadAI.bat` detects that FFmpeg is missing and offers to install it with
+  Windows Package Manager (winget). You can also download a build from https://www.gyan.dev/ffmpeg/builds/,
+  unzip it into `tools/ffmpeg/` inside the project, and the app finds `tools/ffmpeg/bin`.
+- **Mac:** `brew install ffmpeg`.
+
+The Video Studio page shows whether FFmpeg, libx264, libass and faster-whisper were found.
+
+### Performance: what's known and what isn't
+
+Measured in the cloud workspace used to build this (4 virtual CPUs, Linux):
+- `base.en` transcribed 10.7 minutes of audio in about 30 seconds.
+- A 30-second 1080x1920 draft from minute 8.7 rendered and passed QC in about 27 seconds ("balanced").
+
+**This doesn't predict speed on your Windows PC** (Ryzen 5 5600G, 12 GB RAM); it hasn't been run there.
+- A rough expectation is that `base.en` handles an hour of podcast audio in a few minutes, and
+  `small.en` (more accurate) takes roughly 3x longer. Try `base.en` first.
+- Rendering only decodes the part of the recording it needs, but 4K sources render much slower than 1080p.
+- Transcribing a 1-hour recording holds about 250 MB of audio in memory. The video itself is never
+  loaded into memory.
+- The Whisper model downloads once (about 140 MB for `base.en`) the first time you transcribe.
+
+To try the workflow without a real recording, make a **synthetic** test video (computer voices, two
+coloured panels labelled LEFT HOST / RIGHT HOST). This needs espeak-ng:
+`python scripts/make_sample_podcast.py sample.mp4`
 
 ## Trend Scout (Milestone 3)
 
@@ -245,19 +368,20 @@ Rights clarity is automatic:
 | Agent | Status | What it does today |
 |---|---|---|
 | Orchestrator | **implemented** | Builds the pipeline, runs implemented agents, sends the other steps to a person, tracks status, runs post-publish agents |
+| Clip Finder | **implemented** | Local Whisper transcription (or SRT/VTT import), explained 0–100 clip scoring, payoff protection, context flags, Trend Scout + analytics inputs |
+| Video Editor | **implemented** | FFmpeg 1080x1920 H.264/AAC drafts, manual framing with timed changes, word-timed captions, overlays, loudness normalisation, pause tightening |
 | Trend Scout | **implemented** | Live feed research, grouping, verification labels, transparent scoring, recommendations, idea conversion, "trend context" pipeline step |
 | Analytics Agent | **implemented** | CSV import and mapping, manual entry and corrections, retention, conversion, comparison, recommendations, post-publish performance reports |
-| Quality Control | **partial** | Rule-based checks for rights, unverified research claims, hook, title, platforms and earlier steps. It does **not** inspect video yet |
+| Quality Control | **implemented** | Technical video checks on every draft (decode, audio, size/aspect, duration, black frames, silence, loudness, captions, fast start), plus rights, unverified-claim, hook, title, platform and step checks. It never judges whether a video is engaging |
 | Scriptwriter | planned | — |
-| Clip Finder | planned | — |
-| Video Editor | planned | — |
 | Publishing Coordinator | planned | — (and will never auto-post) |
 | Growth Optimizer | planned | — (manual post-publish step) |
 
 ## Project layout
 
 ```
-launch.py, Start OnTheRoadAI.bat/.command   double-click starters
+launch.py, Start OnTheRoadAI.bat/.command   double-click starters (also check for FFmpeg)
+scripts/make_sample_podcast.py              synthetic test podcast generator
 ontheroadai/
   db.py              SQLite schema + automatic upgrade from Milestone 1
   analytics/
@@ -265,6 +389,18 @@ ontheroadai/
     store.py         videos and snapshots: create, correct, delete
     csv_import.py    upload -> map -> preview -> import -> undo
     insights.py      retention, conversion, comparison, recommendations
+  studio/
+    media.py         ffprobe/FFmpeg: validation, audio, silence/black/loudness detection
+    transcript.py    faster-whisper transcription, SRT/VTT/JSON import, safe editing
+    clipfinder.py    moment scoring and selection
+    framing.py       crop math, layouts, framing changes, pause tightening
+    captions.py      word-timed captions and overlays (ASS subtitles)
+    render.py        FFmpeg rendering with progress
+    videoqc.py       technical checks on drafts
+    jobs.py          background job queue, worker, recovery
+    pipeline.py      what each job does
+    service.py       uploads, library, clips, drafts, approval
+    storage.py       where media files live
   trends/
     sources.py       default feeds, user feeds, platforms that need credentials
     fetcher.py       polite HTTP: robots.txt, rate limits, conditional GET
@@ -288,6 +424,8 @@ Tables:
   `source_permissions`, `idea_sources`, `approvals`, `analytics` (old manual entries, migrated
   automatically), `activity_log`.
 - **Milestone 2:** `videos`, `video_snapshots`, `analytics_imports`, `mapping_presets`.
+- **Milestone 4:** `studio_uploads`, `studio_recordings`, `studio_transcripts`, `studio_clips`,
+  `studio_drafts`, `studio_jobs`.
 - **Milestone 3:** `research_sources`, `research_runs`, `research_run_sources`, `research_items`,
   `research_stories`, `creators`, `app_settings`.
 
@@ -301,6 +439,8 @@ python -m pytest
 ## Safety rules built in
 
 - No automatic publishing, no paid services, and no logins to any platform.
+- Video, audio and transcripts stay on your computer (`data/media/`, git-ignored). Transcription runs
+  locally, so nothing is sent to a transcription service.
 - The only internet access is Trend Scout reading public RSS/Atom feeds, politely, as described above.
 - Publishing needs a named human approval, cleared footage rights and a passed QC check.
 - Missing metrics are never estimated. Every recommendation shows its evidence and sample size.

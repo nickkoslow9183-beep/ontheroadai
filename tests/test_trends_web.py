@@ -140,6 +140,6 @@ def test_idea_page_shows_trend_scout_and_agents_page(client, tapp):
     agents = client.get("/agents").get_data(as_text=True)
     block = agents[agents.index("Trend Scout"):agents.index("Trend Scout") + 300]
     assert "a-implemented" in block
-    for name in ("Scriptwriter", "Clip Finder", "Video Editor", "Publishing Coordinator", "Growth Optimizer"):
+    for name in ("Scriptwriter", "Publishing Coordinator", "Growth Optimizer"):  # still planned after Milestone 4
         b = agents[agents.index(name):agents.index(name) + 200]
         assert "a-planned" in b, name

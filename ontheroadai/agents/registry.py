@@ -18,6 +18,7 @@ SPECS: dict[str, AgentSpec] = {
                 "Moves ideas to 'ready_for_review' when all steps are done",
                 "Creates post-publish analytics/growth tasks",
                 "Starts Trend Scout research runs (on demand or scheduled) and records them",
+                "Routes Video Studio work: inspect -> transcribe -> clip finding, render -> QC -> your approval",
             ),
             planned=("Scheduling and priority queues across accounts", "Retry/backoff policies"),
         ),
@@ -61,29 +62,44 @@ SPECS: dict[str, AgentSpec] = {
             target_milestone="Milestone 3",
         ),
         AgentSpec(
-            "clip_finder", "Clip Finder", PLANNED,
-            "Finds usable moments in authorized footage only.",
-            planned=("Transcript search of our own/authorized footage (open-source speech-to-text)",
-                     "Podcast highlight detection"),
-            target_milestone="Milestone 4",
-        ),
-        AgentSpec(
-            "video_editor", "Video Editor", PLANNED,
-            "Produces vertical cuts, captions and branding.",
-            planned=("FFmpeg-based 9:16 reframing, burned-in captions, brand templates",),
-            target_milestone="Milestone 4",
-        ),
-        AgentSpec(
-            "quality_control", "Quality Control", PARTIAL,
-            "Checks content is complete and legally safe before human review.",
+            "clip_finder", "Clip Finder", IMPLEMENTED,
+            "Finds short-form moments in your own or authorized recordings.",
             works_today=(
-                "Blocks researched ideas whose claims are unverified until someone acknowledges them",
-                "Blocks ideas whose external footage lacks documented permission",
-                "Checks hook, title and target platforms are present",
-                "Checks earlier pipeline steps are complete",
+                "Transcribes recordings locally with faster-whisper (word timestamps), or imports SRT/VTT",
+                "Scores transcript moments 0-100 with explanations (hook, debate, energy, pacing, dead air, context)",
+                "Ends clips at the end of a thought (payoff protection) and flags context problems",
+                "Uses Trend Scout research and your analytics' best length band when available",
+                "Completes the pipeline's footage step for ideas created from Studio drafts",
             ),
-            planned=("Video checks: resolution, aspect ratio, loudness, caption accuracy",),
-            target_milestone="Milestone 4",
+            planned=("Visual moment detection for gameplay without speech", "Speaker diarization (not implemented)"),
+            target_milestone="",
+        ),
+        AgentSpec(
+            "video_editor", "Video Editor", IMPLEMENTED,
+            "Produces vertical drafts with captions using FFmpeg.",
+            works_today=(
+                "Renders real 1080x1920 H.264/AAC MP4 drafts (3 presets)",
+                "Manual framing: left / right / center / manual / both / top-bottom split, with timed changes",
+                "Burned-in captions from real word timings, with word highlight; timed text overlays",
+                "Loudness normalisation; optional pause tightening (cuts detected silence only)",
+                "Completes the pipeline's editing step when a Studio draft is approved",
+            ),
+            planned=("Automatic active-speaker framing (not implemented: framing is manual)", "Brand templates"),
+            target_milestone="",
+        ),
+        AgentSpec(
+            "quality_control", "Quality Control", IMPLEMENTED,
+            "Checks content is complete, technically sound and legally safe before human review.",
+            works_today=(
+                "Video checks on every draft: decodes, audio present, 1080x1920 / 9:16, duration, black frames, "
+                "long silences, clipping/loudness, missing captions, caption timing, fast-start file",
+                "Blocks researched ideas whose claims are unverified until someone acknowledges them",
+                "Blocks footage without documented permission",
+                "Checks hook, title, platforms and earlier pipeline steps",
+            ),
+            planned=("Visual content checks (e.g. a face cut off by the crop)",
+                     "Never judges whether a video is engaging: that stays with you"),
+            target_milestone="",
         ),
         AgentSpec(
             "publishing_coordinator", "Publishing Coordinator", PLANNED,
@@ -116,4 +132,12 @@ def implementation_for(agent_key: str):
         from .trend_scout_agent import TrendScoutAgent
 
         return TrendScoutAgent()
+    if agent_key == "clip_finder":
+        from .studio_agents import ClipFinderAgent
+
+        return ClipFinderAgent()
+    if agent_key == "video_editor":
+        from .studio_agents import VideoEditorAgent
+
+        return VideoEditorAgent()
     return None

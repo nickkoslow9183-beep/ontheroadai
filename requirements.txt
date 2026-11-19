@@ -1,1 +1,4 @@
 flask==3.0.3
+# Video Studio transcription (runs locally on the CPU; the model downloads once on first use)
+faster-whisper==1.2.1
+numpy>=1.24

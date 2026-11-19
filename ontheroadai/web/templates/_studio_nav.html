@@ -1,0 +1,7 @@
+<nav class="subnav" aria-label="Video Studio sections">
+  <a href="{{ url_for('studio_home') }}" class="{{ 'on' if request.endpoint == 'studio_home' }}">Upload recording</a>
+  <a href="{{ url_for('studio_recordings') }}" class="{{ 'on' if request.endpoint in ('studio_recordings', 'studio_recording', 'studio_transcript', 'studio_clip') }}">Source library &amp; clips</a>
+  <a href="{{ url_for('studio_jobs') }}" class="{{ 'on' if request.endpoint == 'studio_jobs' }}">Processing jobs</a>
+  <a href="{{ url_for('studio_drafts') }}" class="{{ 'on' if request.endpoint in ('studio_drafts', 'studio_draft') }}">Video drafts &amp; QC</a>
+  <a href="{{ url_for('studio_approvals') }}" class="{{ 'on' if request.endpoint == 'studio_approvals' }}">Approval queue</a>
+</nav>

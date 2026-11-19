@@ -49,3 +49,9 @@ def _no_real_waiting(monkeypatch):
     from ontheroadai.trends.fetcher import Fetcher
 
     monkeypatch.setattr(Fetcher, "DEFAULT_HOST_INTERVAL", 0.0)
+
+
+@pytest.fixture(autouse=True)
+def _media_root(tmp_path, monkeypatch):
+    """Video Studio files go to a temporary folder in tests, never the real data/media."""
+    monkeypatch.setenv("ONTHEROADAI_MEDIA", str(tmp_path / "media"))

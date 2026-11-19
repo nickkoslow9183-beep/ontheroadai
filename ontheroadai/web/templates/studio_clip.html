@@ -1,0 +1,128 @@
+{% extends "base.html" %}
+{% block title %}Clip editor{% endblock %}
+{% block content %}
+<h1>Video Studio</h1>
+{% include "_studio_nav.html" %}
+<p class="small"><a href="{{ url_for('studio_recording', rid=rec.id) }}#clips">← {{ rec.title }}</a></p>
+<h2 class="page-title">Clip editor: {{ clip.title or 'Untitled' }} <span class="score">{{ clip.score if clip.score is not none else '—' }}</span></h2>
+
+<form method="post" id="clip-form" data-src-w="{{ rec.width }}" data-src-h="{{ rec.height }}">
+<div class="layout">
+<div>
+  <section>
+    <div class="preview-wrap">
+      <video id="cvideo" src="{{ url_for('studio_media_recording', rid=rec.id) }}#t={{ clip.start }},{{ clip.end }}" controls preload="metadata"></video>
+      <div class="cropbox" aria-hidden="true"></div><div class="cropbox second" aria-hidden="true"></div>
+    </div>
+    <p class="small muted">The highlighted box shows what the vertical crop will keep (approximately). <b>Framing is manual</b>:
+      speakers aren't detected automatically. Use “framing changes” to switch between hosts at the right moments.</p>
+    <div class="grid3">
+      <label>Start (s) <input name="start" id="start" type="number" step="0.01" min="0" value="{{ clip.start }}"></label>
+      <label>End (s) <input name="end" id="end" type="number" step="0.01" min="0" value="{{ clip.end }}"></label>
+      <div class="small"><b id="dur">{{ '%.1f'|format(clip.duration) }}s</b><br>
+        <button type="button" class="link" id="set-start">Set start = video time</button><br>
+        <button type="button" class="link" id="set-end">Set end = video time</button><br>
+        <button type="button" class="link" id="play-clip">▶ Play this range</button></div>
+    </div>
+  </section>
+
+  <section>
+    <h3>Transcript around this clip</h3>
+    <div class="segs compact">
+    {% for s in segs %}
+      <div class="seg-line {{ 'in-clip' if s.start >= clip.start - 0.05 and s.end <= clip.end + 0.05 }}">
+        <button type="button" class="link jump" data-t="{{ s.start }}">{{ s.start|tc }}</button>
+        <span>{% if s.speaker %}<b>{{ s.speaker }}:</b> {% endif %}{{ s.text }}</span>
+        <span class="row-buttons"><button type="button" class="link use-start" data-t="{{ s.start }}">start here</button>
+          <button type="button" class="link use-end" data-t="{{ s.end }}">end here</button></span>
+      </div>
+    {% else %}<p class="small muted">No transcript lines in this range.</p>{% endfor %}
+    </div>
+  </section>
+
+  <section>
+    <h3>Why this score</h3>
+    {% if clip.context_flags %}<ul class="small flags">{% for fl in clip.context_flags %}<li>⚠ {{ fl }}</li>{% endfor %}</ul>{% endif %}
+    {% if clip.score_detail.factors %}
+    <table class="small"><tbody>{% for f in clip.score_detail.factors %}
+      <tr><td>{{ f.label }}<div class="muted">{{ f.explanation }}</div></td><td class="num">{{ f.points }}<span class="muted">/{{ f.weight }}</span></td></tr>{% endfor %}</tbody></table>
+    <p class="small muted">{{ clip.score_detail.length_note }} {{ clip.score_detail.disclaimer }} {{ clip.score_detail.rescored }}</p>
+    {% else %}<p class="small muted">{{ clip.score_detail.note or 'Not scored.' }}</p>{% endif %}
+  </section>
+</div>
+
+<aside>
+  <section>
+    <h3>Text</h3>
+    <label>Title <input name="title" value="{{ clip.title }}" maxlength="150"></label>
+    <label>Hook (shown on screen for the first 3s with the Sports storytelling preset) <input name="hook" value="{{ clip.hook }}" maxlength="150"></label>
+    <label>Preset <select name="preset">{% for k, p in CLIP_PRESETS.items() %}<option value="{{ k }}" {{ 'selected' if k == clip.preset }}>{{ p.label }}</option>{% endfor %}</select></label>
+    <label class="inline"><input type="checkbox" name="tighten" value="1" {{ 'checked' if clip.tighten_pauses }}> Tighten pauses (cut detected silences over 0.7s)</label>
+  </section>
+
+  <section>
+    <h3>Framing</h3>
+    <label>Layout <select name="mode" id="mode">{% for k, l in FRAMING_MODES.items() %}<option value="{{ k }}" {{ 'selected' if k == clip.framing.mode }}>{{ l }}</option>{% endfor %}</select></label>
+    <label>Manual position <input type="range" name="x" id="x" min="0" max="1" step="0.01" value="{{ clip.framing.x }}"></label>
+    <div class="grid2 small">
+      <label>Left host is at <input type="range" name="left_x" id="left_x" min="0" max="1" step="0.01" value="{{ clip.framing.left_x }}"></label>
+      <label>Right host is at <input type="range" name="right_x" id="right_x" min="0" max="1" step="0.01" value="{{ clip.framing.right_x }}"></label>
+    </div>
+    <p class="small"><b>Framing changes</b> (seconds from clip start)</p>
+    <div id="kfs">
+      {% for kf in clip.framing.keyframes + [{'t': '', 'mode': 'right', 'x': 0.5}] %}
+      <div class="kf inline-form small">
+        <input name="kf_t" type="number" step="0.01" min="0" value="{{ kf.t }}" placeholder="time" style="width:5.5rem" aria-label="Change at (s)">
+        <select name="kf_mode" aria-label="Switch to">{% for k, l in FRAMING_MODES.items() %}<option value="{{ k }}" {{ 'selected' if k == kf.mode }}>{{ k }}</option>{% endfor %}</select>
+        <input name="kf_x" type="number" step="0.01" min="0" max="1" value="{{ kf.x }}" style="width:4.5rem" aria-label="x">
+        <button type="button" class="link kf-now">= video time</button>
+      </div>{% endfor %}
+    </div>
+    <button type="button" class="link" id="add-kf">+ add another change</button>
+    <p class="small muted">Leave the time empty to remove a change.</p>
+  </section>
+
+  <section>
+    <h3>Captions</h3>
+    {% if not word_timings %}<p class="small gate">This transcript has no word timings, so captions will use whole-line timing.</p>{% endif %}
+    <label class="inline"><input type="checkbox" name="cap_enabled" value="1" {{ 'checked' if clip.caption.enabled }}> Burn in captions</label>
+    <div class="grid2 small">
+      <label>Font <select name="font">{% for fnt in fonts %}<option {{ 'selected' if fnt == clip.caption.font }}>{{ fnt }}</option>{% endfor %}
+        {% if clip.caption.font not in fonts %}<option selected>{{ clip.caption.font }}</option>{% endif %}</select></label>
+      <label>Size <input name="size" type="number" min="28" max="120" value="{{ clip.caption.size }}"></label>
+      <label>Position <select name="position">{% for p in positions %}<option {{ 'selected' if p == clip.caption.position }}>{{ p }}</option>{% endfor %}</select></label>
+      <label>Max characters per line <input name="max_chars" type="number" min="10" max="40" value="{{ clip.caption.max_chars }}"></label>
+      <label>Text colour <input name="color" type="color" value="{{ clip.caption.color }}"></label>
+      <label>Outline colour <input name="outline_color" type="color" value="{{ clip.caption.outline_color }}"></label>
+      <label>Outline width <input name="outline" type="number" min="0" max="12" value="{{ clip.caption.outline }}"></label>
+      <label>Highlight <select name="highlight"><option value="word" {{ 'selected' if clip.caption.highlight == 'word' }}>Word being spoken</option><option value="none" {{ 'selected' if clip.caption.highlight == 'none' }}>None</option></select></label>
+      <label>Highlight colour <input name="highlight_color" type="color" value="{{ clip.caption.highlight_color }}"></label>
+      <label class="inline"><input type="checkbox" name="uppercase" value="1" {{ 'checked' if clip.caption.uppercase }}> UPPERCASE</label>
+    </div>
+  </section>
+
+  <section>
+    <h3>Text overlays</h3>
+    <details><summary class="small">Edit overlays (for podcast games and drafts)</summary>
+      <p class="small muted">A list in JSON. A <b>board</b> keeps every line on screen and reveals each pick only when its
+        <code>phrase</code> is actually said (using real word timings). Phrases that aren't found are reported in QC.
+        <code>text</code> overlays use start/end seconds from the clip start.</p>
+      <textarea name="overlays" rows="10" class="mono">{{ overlays_json }}</textarea>
+      <p class="small muted">Example: <code>[{"type":"board","title":"4-LEVEL FOOD DRAFT","lines":[{"label":"Level 1 · Fast food","pick":"Chick-fil-A","phrase":"chick-fil-a"}, …]}]</code></p>
+    </details>
+  </section>
+
+  <section>
+    <label>Export quality <select name="quality"><option value="fast">Fast (draft)</option><option value="balanced" selected>Balanced</option><option value="high">High (slower)</option></select></label>
+    <div class="row-buttons">
+      <button name="action" value="save" class="secondary">Save</button>
+      <button name="action" value="render">Save &amp; render draft</button>
+    </div>
+    <p class="small muted">Output: MP4, H.264 + AAC, 1080x1920 (9:16), loudness-normalised. Rendering runs in the background.</p>
+    {% if drafts %}<p class="small">Drafts: {% for d in drafts %}<a href="{{ url_for('studio_draft', did=d.id) }}">v{{ d.version }}</a> {{ badge(d.status) }} {% endfor %}</p>{% endif %}
+  </section>
+</aside>
+</div>
+</form>
+<script src="{{ url_for('static', filename='studio.js') }}"></script>
+{% endblock %}

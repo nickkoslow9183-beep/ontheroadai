@@ -1,0 +1,26 @@
+{% extends "base.html" %}
+{% block title %}Source library{% endblock %}
+{% block content %}
+<h1>Video Studio</h1>
+{% include "_studio_nav.html" %}
+<section>
+  <h2>Source library</h2>
+  {% if recordings %}
+  <div class="table-wrap"><table>
+    <thead><tr><th></th><th>Recording</th><th>Kind</th><th>Status</th><th>Length</th><th>Video</th><th>Transcript</th><th class="num">Clips</th><th class="num">Drafts</th><th>Footage</th></tr></thead>
+    <tbody>{% for r in recordings %}
+      <tr>
+        <td><img src="{{ url_for('studio_media_thumb', rid=r.id) }}" alt="" class="thumb" loading="lazy" onerror="this.style.visibility='hidden'"></td>
+        <td><a href="{{ url_for('studio_recording', rid=r.id) }}"><b>{{ r.title }}</b></a><div class="small muted">{{ r.original_filename }}</div></td>
+        <td class="small">{{ STUDIO_KINDS.get(r.kind, r.kind) }}</td>
+        <td>{{ badge(r.status) }}</td>
+        <td class="small">{{ r.duration|tc }}</td>
+        <td class="small">{{ r.width }}x{{ r.height }} · {{ '%.0f'|format(r.size_bytes / 1e6) }} MB</td>
+        <td class="small">{{ r.transcript_source or '—' }}</td>
+        <td class="num">{{ r.clips }}</td><td class="num">{{ r.drafts }}</td>
+        <td class="small">{% if r.ownership == 'third_party' %}{{ r.creator }} {{ badge(r.rights_status or 'unknown') }}{% else %}ours{% endif %}</td>
+      </tr>{% endfor %}</tbody>
+  </table></div>
+  {% else %}<p class="muted">No recordings yet. <a href="{{ url_for('studio_home') }}#upload">Upload one</a>.</p>{% endif %}
+</section>
+{% endblock %}

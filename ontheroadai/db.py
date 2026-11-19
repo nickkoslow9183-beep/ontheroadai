@@ -391,9 +391,136 @@ CREATE TABLE IF NOT EXISTS app_settings (
     key   TEXT PRIMARY KEY,
     value TEXT NOT NULL
 );
+
+-- ===== Milestone 4: Video Studio ============================================
+-- Media files live on disk under data/media (git-ignored); only paths and metadata are stored here.
+CREATE TABLE IF NOT EXISTS studio_uploads (
+    token         TEXT PRIMARY KEY,
+    filename      TEXT NOT NULL,
+    size_expected INTEGER NOT NULL CHECK (size_expected > 0),
+    received      INTEGER NOT NULL DEFAULT 0,
+    temp_path     TEXT NOT NULL,
+    meta_json     TEXT NOT NULL DEFAULT '{}',
+    created_at    TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS studio_recordings (
+    id                INTEGER PRIMARY KEY,
+    business          TEXT NOT NULL CHECK (business IN ('on-the-road-media', 'gta6-network')),
+    kind              TEXT NOT NULL CHECK (kind IN ('podcast', 'sports_story', 'gameplay', 'streamer_footage', 'other')),
+    title             TEXT NOT NULL CHECK (length(trim(title)) > 0),
+    original_filename TEXT NOT NULL,
+    stored_path       TEXT NOT NULL,
+    sha256            TEXT NOT NULL UNIQUE,
+    size_bytes        INTEGER NOT NULL,
+    duration          REAL,
+    width             INTEGER,
+    height            INTEGER,
+    fps               REAL,
+    video_codec       TEXT,
+    audio_codec       TEXT,
+    has_audio         INTEGER NOT NULL DEFAULT 0,
+    container         TEXT,
+    ownership         TEXT NOT NULL DEFAULT 'own' CHECK (ownership IN ('own', 'third_party')),
+    creator           TEXT NOT NULL DEFAULT '',
+    source_url        TEXT NOT NULL DEFAULT '',
+    rights_source_id  INTEGER REFERENCES source_permissions(id) ON DELETE SET NULL,
+    status            TEXT NOT NULL DEFAULT 'uploaded'
+                      CHECK (status IN ('uploaded', 'processing', 'ready', 'failed', 'deleted')),
+    notes             TEXT NOT NULL DEFAULT '',
+    created_at        TEXT NOT NULL,
+    updated_at        TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS studio_transcripts (
+    id            INTEGER PRIMARY KEY,
+    recording_id  INTEGER NOT NULL UNIQUE REFERENCES studio_recordings(id) ON DELETE CASCADE,
+    source        TEXT NOT NULL CHECK (source IN ('whisper', 'import_srt', 'import_vtt', 'import_json')),
+    model         TEXT NOT NULL DEFAULT '',
+    language      TEXT NOT NULL DEFAULT '',
+    segments_json TEXT NOT NULL,
+    word_timings  INTEGER NOT NULL DEFAULT 0,
+    edited        INTEGER NOT NULL DEFAULT 0,
+    created_at    TEXT NOT NULL,
+    updated_at    TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS studio_clips (
+    id                 INTEGER PRIMARY KEY,
+    recording_id       INTEGER NOT NULL REFERENCES studio_recordings(id) ON DELETE CASCADE,
+    start              REAL NOT NULL CHECK (start >= 0),
+    end                REAL NOT NULL,
+    score              INTEGER,
+    score_json         TEXT NOT NULL DEFAULT '{}',
+    hook               TEXT NOT NULL DEFAULT '',
+    title              TEXT NOT NULL DEFAULT '',
+    category           TEXT NOT NULL DEFAULT 'general',
+    excerpt            TEXT NOT NULL DEFAULT '',
+    context_flags_json TEXT NOT NULL DEFAULT '[]',
+    status             TEXT NOT NULL DEFAULT 'candidate'
+                       CHECK (status IN ('candidate', 'selected', 'rejected', 'rendered')),
+    preset             TEXT NOT NULL DEFAULT 'podcast_clean',
+    framing_json       TEXT NOT NULL DEFAULT '{}',
+    caption_json       TEXT NOT NULL DEFAULT '{}',
+    overlays_json      TEXT NOT NULL DEFAULT '[]',
+    tighten_pauses     INTEGER NOT NULL DEFAULT 0,
+    origin             TEXT NOT NULL DEFAULT 'auto' CHECK (origin IN ('auto', 'manual')),
+    trend_story_id     INTEGER REFERENCES research_stories(id) ON DELETE SET NULL,
+    created_at         TEXT NOT NULL,
+    updated_at         TEXT NOT NULL,
+    CHECK (end > start)
+);
+CREATE INDEX IF NOT EXISTS idx_clips_recording ON studio_clips(recording_id, score);
+
+CREATE TABLE IF NOT EXISTS studio_drafts (
+    id            INTEGER PRIMARY KEY,
+    clip_id       INTEGER NOT NULL REFERENCES studio_clips(id) ON DELETE CASCADE,
+    recording_id  INTEGER NOT NULL REFERENCES studio_recordings(id) ON DELETE CASCADE,
+    version       INTEGER NOT NULL DEFAULT 1,
+    file_path     TEXT,
+    size_bytes    INTEGER,
+    duration      REAL,
+    width         INTEGER,
+    height        INTEGER,
+    settings_json TEXT NOT NULL DEFAULT '{}',
+    status        TEXT NOT NULL DEFAULT 'queued'
+                  CHECK (status IN ('queued', 'rendering', 'qc', 'needs_review', 'approved', 'rejected', 'failed')),
+    qc_json       TEXT NOT NULL DEFAULT '{}',
+    qc_status     TEXT CHECK (qc_status IS NULL OR qc_status IN ('pass', 'warn', 'fail')),
+    approved_by   TEXT,
+    approved_at   TEXT,
+    review_notes  TEXT NOT NULL DEFAULT '',
+    idea_id       INTEGER REFERENCES ideas(id) ON DELETE SET NULL,
+    created_at    TEXT NOT NULL,
+    updated_at    TEXT NOT NULL,
+    -- a draft can only be approved by a named person after QC found no failures
+    CHECK (status <> 'approved' OR (approved_by IS NOT NULL AND length(trim(approved_by)) > 0
+                                    AND qc_status IN ('pass', 'warn')))
+);
+
+CREATE TABLE IF NOT EXISTS studio_jobs (
+    id           INTEGER PRIMARY KEY,
+    kind         TEXT NOT NULL CHECK (kind IN ('inspect', 'transcribe', 'find_clips', 'render', 'qc')),
+    recording_id INTEGER REFERENCES studio_recordings(id) ON DELETE CASCADE,
+    clip_id      INTEGER REFERENCES studio_clips(id) ON DELETE CASCADE,
+    draft_id     INTEGER REFERENCES studio_drafts(id) ON DELETE CASCADE,
+    status       TEXT NOT NULL DEFAULT 'queued'
+                 CHECK (status IN ('queued', 'processing', 'completed', 'failed', 'needs_review', 'cancelled')),
+    progress     REAL NOT NULL DEFAULT 0,
+    message      TEXT NOT NULL DEFAULT '',
+    error        TEXT NOT NULL DEFAULT '',
+    attempts     INTEGER NOT NULL DEFAULT 0,
+    max_attempts INTEGER NOT NULL DEFAULT 2,
+    params_json  TEXT NOT NULL DEFAULT '{}',
+    heartbeat_at TEXT,
+    created_at   TEXT NOT NULL,
+    started_at   TEXT,
+    finished_at  TEXT
+);
+CREATE INDEX IF NOT EXISTS idx_jobs_status ON studio_jobs(status, id);
 """
 
-SCHEMA_VERSION = 3
+SCHEMA_VERSION = 4
 
 
 def now() -> str:

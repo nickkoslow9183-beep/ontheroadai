@@ -1,0 +1,82 @@
+{% extends "base.html" %}
+{% block title %}Video Studio{% endblock %}
+{% block content %}
+<h1>Video Studio</h1>
+{% include "_studio_nav.html" %}
+
+{% if not tools.ffmpeg or not tools.ffprobe %}
+<section class="gate"><b>FFmpeg isn't installed on this computer.</b> The Studio needs it to read and render video.
+  See “Installing FFmpeg” in the README (on Windows the start file offers to install it for you).</section>
+{% endif %}
+{% if not worker %}
+<p class="small muted">Background processing isn't running in this window (tests / debug mode). Jobs will wait in the queue until the app is started normally.</p>
+{% endif %}
+
+<div class="kpis">
+  <div class="kpi"><span>Recordings</span><b>{{ counts.recordings }}</b></div>
+  <div class="kpi"><span>Clip candidates</span><b>{{ counts.candidates }}</b></div>
+  <div class="kpi"><span>Jobs running / queued</span><b>{{ counts.jobs.get('processing', 0) }} / {{ counts.jobs.get('queued', 0) }}</b></div>
+  <div class="kpi"><span>Drafts awaiting approval</span><b>{{ counts.drafts.get('needs_review', 0) }}</b></div>
+</div>
+
+<section id="upload">
+  <h2>Upload a recording</h2>
+  <form id="upload-form" class="box">
+    <div class="grid2">
+      <label>Video file (MP4, MOV, M4V; up to {{ max_gb }} GB)
+        <input type="file" name="file" accept=".mp4,.mov,.m4v,video/mp4,video/quicktime" required></label>
+      <label>Title <input name="title" maxlength="200" placeholder="e.g. Episode 12: last-shot debate"></label>
+      <label>Business <select name="business"><option value="on-the-road-media">On The Road Media</option><option value="gta6-network">GTA 6 network</option></select></label>
+      <label>What is it?
+        <select name="kind">{% for k, label in STUDIO_KINDS.items() %}<option value="{{ k }}">{{ label }}</option>{% endfor %}</select></label>
+      <label>Who owns the footage?
+        <select name="ownership"><option value="own">We recorded it</option><option value="third_party">Someone else (needs written permission)</option></select></label>
+      <label>Creator / source (required for third-party) <input name="creator" maxlength="120"></label>
+      <label>Source link (optional) <input name="source_url" type="url" placeholder="https://"></label>
+      <label>Transcription model
+        <select name="model">{% for k, d in WHISPER_MODELS.items() %}<option value="{{ k }}" {{ 'selected' if k == default_model }}>{{ k }}: {{ d }}</option>{% endfor %}</select></label>
+    </div>
+    <button type="submit">Upload and process</button>
+    <div class="upload-progress" hidden>
+      <progress max="100" value="0"></progress> <span class="small upload-text"></span>
+    </div>
+  </form>
+  <p class="small muted">The file is sent in 8 MB pieces and saved under <code>{{ disk.root }}</code> on this computer
+    ({{ '%.1f'|format(disk.free_bytes / 1e9) }} GB free). It's checked with FFmpeg (the real streams, not just the
+    file extension), then automatically transcribed and searched for clips. Nothing is uploaded to the internet.</p>
+</section>
+
+<div class="grid2">
+  <section>
+    <h2>Recent recordings</h2>
+    {% if recordings %}<ul class="plain">{% for r in recordings %}
+      <li><a href="{{ url_for('studio_recording', rid=r.id) }}">{{ r.title }}</a> {{ badge(r.status) }}
+        <span class="small muted">{{ r.duration|tc }} · {{ r.clips }} clips · {{ r.drafts }} drafts</span></li>{% endfor %}</ul>
+    {% else %}<p class="muted">Nothing uploaded yet.</p>{% endif %}
+  </section>
+  <section>
+    <h2>Waiting for your approval</h2>
+    {% if review %}<ul class="plain">{% for d in review %}
+      <li><a href="{{ url_for('studio_draft', did=d.id) }}">{{ d.clip_title or 'Draft' }} (v{{ d.version }})</a> QC {{ badge(d.qc_status) }}</li>{% endfor %}</ul>
+    {% else %}<p class="muted">No drafts waiting.</p>{% endif %}
+  </section>
+</div>
+
+<section>
+  <div class="row-between"><h2>Processing jobs</h2><a href="{{ url_for('studio_jobs') }}">All jobs →</a></div>
+  {% if jobs %}<div class="table-wrap"><table class="jobs" data-poll="{{ url_for('studio_jobs_json') }}">
+    <thead><tr><th>Job</th><th>Step</th><th>For</th><th>Status</th><th>Progress</th><th>Details</th></tr></thead>
+    <tbody>{% for j in jobs %}{% include "_job_row.html" %}{% endfor %}</tbody></table></div>
+  {% else %}<p class="muted">No jobs yet.</p>{% endif %}
+</section>
+
+<section>
+  <h2>Tools on this computer</h2>
+  <ul class="small">
+    <li>FFmpeg: {% if tools.ffmpeg %}{{ tools.version }} {{ badge('ok') }}{% if not tools.libx264 %} <b>(no libx264: H.264 export won't work)</b>{% endif %}{% if not tools.libass %} <b>(no libass: captions can't be burned in)</b>{% endif %}{% else %}{{ badge('missing') }}{% endif %}</li>
+    <li>Transcription (faster-whisper, runs locally on the CPU): {% if whisper.installed %}{{ badge('ok') }} v{{ whisper.version }}. The model downloads once on first use (~75–480 MB).{% else %}{{ badge('missing') }} {{ whisper.error }}. You can still import .srt/.vtt transcripts.{% endif %}</li>
+    <li>Storage: {{ '%.2f'|format(disk.used_bytes / 1e9) }} GB used in <code>{{ disk.root }}</code>. This folder is not saved to GitHub.</li>
+  </ul>
+</section>
+<script src="{{ url_for('static', filename='studio.js') }}"></script>
+{% endblock %}

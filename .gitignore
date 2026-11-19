@@ -17,3 +17,14 @@ data/
 *.pem
 *.key
 credentials*.json
+
+# Video Studio media (never commit recordings, audio, transcripts or drafts)
+data/media/
+tools/ffmpeg/
+*.mp4
+*.mov
+*.m4v
+*.wav
+*.ass
+*.srt
+*.vtt

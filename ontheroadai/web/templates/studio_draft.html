@@ -1,0 +1,72 @@
+{% extends "base.html" %}
+{% block title %}Draft #{{ d.id }}{% endblock %}
+{% block content %}
+<h1>Video Studio</h1>
+{% include "_studio_nav.html" %}
+<p class="small"><a href="{{ url_for('studio_clip', cid=d.clip_id) }}">← clip editor</a></p>
+<div class="row-between">
+  <h2 class="page-title">{{ d.clip_title or 'Draft' }} <span class="muted">v{{ d.version }}</span></h2>
+  <span>{{ badge(d.status) }} QC {{ badge(d.qc_status or 'pending') }}</span>
+</div>
+
+<div class="layout">
+<div>
+  <section class="draft-player">
+    {% if d.file_path %}
+      <video src="{{ url_for('studio_media_draft', did=d.id) }}" controls preload="metadata" playsinline></video>
+      <p><a class="btn" href="{{ url_for('studio_media_draft', did=d.id, download=1) }}">Download MP4</a>
+        <span class="small muted">{{ d.width }}x{{ d.height }} · {{ '%.1f'|format(d.duration) }}s · {{ '%.1f'|format(d.size_bytes / 1e6) }} MB · H.264/AAC</span></p>
+    {% else %}
+      <p class="muted">{% if not job %}Not rendered yet.{% endif %}</p>
+      {% if d.status == 'failed' %}<p class="err small">{{ d.review_notes }}</p>{% endif %}
+    {% endif %}
+    {% if job and d.status in ('queued', 'rendering', 'qc', 'failed') %}
+      <p class="small muted">{{ 'Rendering' if d.status in ('queued', 'rendering') else 'Running quality checks' if d.status == 'qc' else 'Last job' }}. This page updates by itself.</p>
+      <table class="jobs small" data-poll="{{ url_for('studio_jobs_json') }}" data-reload-when-done="1"><tbody>{% set j = job %}{% include "_job_row.html" %}</tbody></table>
+    {% endif %}
+  </section>
+
+  <section>
+    <h3>Quality control</h3>
+    {% if d.qc.checks %}
+      <table class="small"><tbody>{% for c in d.qc.checks %}
+        <tr><td>{{ badge(c.status) }}</td><td><b>{{ c.label }}</b><div class="muted">{{ c.detail }}</div>{% if c.fix %}<div>Fix: {{ c.fix }}</div>{% endif %}</td></tr>{% endfor %}</tbody></table>
+      <p class="small muted">{{ d.qc.disclaimer }}</p>
+    {% else %}<p class="muted">QC runs automatically after rendering.</p>{% endif %}
+  </section>
+</div>
+<aside>
+  <section id="review">
+    <h3>Your decision</h3>
+    {% if d.status == 'approved' %}
+      <p>Approved by <b>{{ d.approved_by }}</b> {{ (d.approved_at or '')[:16]|replace('T', ' ') }}.</p>
+      {% if d.idea_id %}<p>Idea: <a href="{{ url_for('idea_detail', idea_id=d.idea_id) }}">#{{ d.idea_id }}</a></p>
+      {% else %}<form method="post" action="{{ url_for('studio_draft_idea', did=d.id) }}"><button>Send to idea pipeline</button>
+        <p class="small muted">Creates a linked idea. Publishing still needs the normal approval, and you post it yourself.</p></form>{% endif %}
+    {% elif d.status == 'needs_review' %}
+      <form method="post" action="{{ url_for('studio_draft_review', did=d.id) }}" class="stack">
+        <label>Your name <input name="reviewer" required></label>
+        <label>Decision <select name="decision"><option value="approved">Approve</option><option value="changes_requested">Request changes</option><option value="rejected">Reject</option></select></label>
+        <label>Notes <input name="notes"></label>
+        {% if d.qc_status == 'warn' %}<label class="inline small"><input type="checkbox" name="ack" value="1"> I've reviewed the QC warnings</label>{% endif %}
+        {% if d.qc_status == 'fail' %}<p class="small err">QC failed, so this can't be approved. Fix the problem and re-render.</p>{% endif %}
+        <button>Record decision</button>
+      </form>
+    {% else %}<p class="small muted">Review opens when rendering and QC are done.</p>{% endif %}
+    {% if d.review_notes and d.status != 'failed' %}<p class="small">Notes: {{ d.review_notes }}</p>{% endif %}
+  </section>
+  {% if d.settings.pieces %}
+  <section>
+    <h3>Settings used</h3>
+    <ul class="small">
+      <li>Source: {{ d.recording_title }}, {{ d.settings.clip_start|tc }} → {{ d.settings.clip_end|tc }}</li>
+      <li>Preset: {{ CLIP_PRESETS[d.settings.preset].label if d.settings.preset in CLIP_PRESETS else '—' }} · quality {{ d.settings.quality }}</li>
+      <li>Framing pieces: {{ (d.settings.pieces or [])|length }}{% for p in d.settings.pieces or [] %} [{{ p.mode }} {{ p.src_start|tc }}]{% endfor %}</li>
+      <li>Captions: {{ (d.settings.captions or {}).get('timing', '—') }} timing, {{ ((d.settings.captions or {}).get('cues') or [])|length }} cues</li>
+    </ul>
+  </section>
+  {% endif %}
+</aside>
+</div>
+<script src="{{ url_for('static', filename='studio.js') }}"></script>
+{% endblock %}

@@ -1,0 +1,34 @@
+{% extends "base.html" %}
+{% block title %}Transcript · {{ rec.title }}{% endblock %}
+{% block content %}
+<h1>Video Studio</h1>
+{% include "_studio_nav.html" %}
+<p class="small"><a href="{{ url_for('studio_recording', rid=rec.id) }}">← {{ rec.title }}</a></p>
+<section>
+  <div class="row-between"><h2>Transcript</h2>
+    {% if t %}<a class="btn secondary" href="{{ url_for('studio_transcript_srt', rid=rec.id) }}">Download .srt</a>{% endif %}</div>
+  {% if not t %}<p class="muted">No transcript yet.</p>{% else %}
+  <p class="small muted">Source: {{ t.source }}{% if t.model %} ({{ t.model }}){% endif %}.
+    <span class="lowconf">Underlined words</span> had low recognition confidence, so check them.
+    Speakers are <b>not</b> detected automatically (both hosts share one audio track). Label lines by hand if you want.
+    Changing a line's words removes that line's word timings; they are never re-guessed.</p>
+  <video class="source-video small-video" id="tvideo" src="{{ url_for('studio_media_recording', rid=rec.id) }}" controls preload="metadata"></video>
+  <div class="segs">
+  {% for s in t.segments %}
+    <form method="post" action="{{ url_for('studio_transcript_edit', rid=rec.id, seg_id=s.id) }}" class="seg" id="seg-{{ s.id }}">
+      <button type="button" class="link jump" data-t="{{ s.start }}">{{ s.start|tc }}</button>
+      <input name="speaker" value="{{ s.speaker or '' }}" placeholder="speaker" class="speaker" aria-label="Speaker label" list="speakers">
+      <div class="seg-text">
+        {% if s.words %}<div class="small words">{% for w in s.words %}<span class="{{ 'lowconf' if (w.probability or 1) < 0.5 }}" title="{{ '%.2f'|format(w.start) }}s · confidence {{ '%.0f'|format((w.probability or 0) * 100) }}%">{{ w.word }}</span> {% endfor %}</div>
+        {% else %}<div class="small muted">line timing only</div>{% endif %}
+        <input name="text" value="{{ s.text }}" aria-label="Line text">
+      </div>
+      <button class="secondary">Save</button>
+    </form>
+  {% endfor %}
+  </div>
+  <datalist id="speakers"><option value="Left host"><option value="Right host"><option value="Guest"></datalist>
+  {% endif %}
+</section>
+<script src="{{ url_for('static', filename='studio.js') }}"></script>
+{% endblock %}

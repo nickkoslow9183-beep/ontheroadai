@@ -10,13 +10,15 @@ def test_agent_registry_is_honest():
     assert len(SPECS) == 9
     statuses = {k: s.status for k, s in SPECS.items()}
     assert statuses["orchestrator"] == "implemented"
-    assert statuses["quality_control"] == "partial"
+    # Milestone 4: Quality Control runs real video checks; Clip Finder and Video Editor are implemented.
+    assert statuses["quality_control"] == "implemented"
+    assert statuses["clip_finder"] == "implemented" and statuses["video_editor"] == "implemented"
     # Milestone 2: the Analytics Agent is implemented (and tested in test_analytics_agent.py).
     assert statuses["analytics_agent"] == "implemented"
     assert implementation_for("analytics_agent") is not None
     # Milestone 3: Trend Scout is implemented (tested in test_trends_*.py).
     assert statuses["trend_scout"] == "implemented"
-    planned = {"scriptwriter", "clip_finder", "video_editor", "publishing_coordinator", "growth_optimizer"}
+    planned = {"scriptwriter", "publishing_coordinator", "growth_optimizer"}
     assert {k for k, v in statuses.items() if v == "planned"} == planned
     for key in planned:
         assert implementation_for(key) is None, f"{key} is marked planned but has an implementation"

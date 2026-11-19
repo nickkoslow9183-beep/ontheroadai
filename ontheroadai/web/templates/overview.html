@@ -36,6 +36,15 @@
   {% else %}<p class="muted">Nothing waiting. Start production on an idea to create tasks.</p>{% endif %}
 </section>
 
+{% if studio_review or studio_candidates %}
+<section>
+  <h2>Video Studio</h2>
+  <p>{% if studio_review %}<a href="{{ url_for('studio_approvals') }}"><b>{{ studio_review }}</b> draft(s) waiting for your approval</a>{% endif %}
+    {% if studio_review and studio_candidates %} · {% endif %}
+    {% if studio_candidates %}<b>{{ studio_candidates }}</b> clip candidate(s) to review in <a href="{{ url_for('studio_recordings') }}">recordings</a>{% endif %}</p>
+</section>
+{% endif %}
+
 <section>
   <h2>Awaiting human review</h2>
   {% if review %}

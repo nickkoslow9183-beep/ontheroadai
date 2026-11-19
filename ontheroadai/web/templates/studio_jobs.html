@@ -1,0 +1,22 @@
+{% extends "base.html" %}
+{% block title %}Processing jobs{% endblock %}
+{% block content %}
+<h1>Video Studio</h1>
+{% include "_studio_nav.html" %}
+<section>
+  <h2>Processing jobs</h2>
+  {% if not worker %}<p class="small muted">The background worker isn't running in this window, so queued jobs will start when the app runs normally.</p>{% endif %}
+  <p class="small muted">Jobs run one at a time in the background, so the dashboard stays usable. If the app is closed mid-job,
+    the job restarts automatically next time (up to 2 attempts).</p>
+  {% if jobs %}
+  <div class="table-wrap"><table class="jobs" data-poll="{{ url_for('studio_jobs_json') }}">
+    <thead><tr><th>Job</th><th>Step</th><th>For</th><th>Status</th><th>Progress</th><th>Details</th><th></th></tr></thead>
+    <tbody>{% for j in jobs %}
+      {% include "_job_row.html" %}
+      {% if j.status == 'failed' %}<tr><td colspan="7"><form method="post" action="{{ url_for('studio_job_retry', job_id=j.id) }}"><button class="link">Retry job #{{ j.id }}</button></form></td></tr>{% endif %}
+    {% endfor %}</tbody>
+  </table></div>
+  {% else %}<p class="muted">No jobs yet.</p>{% endif %}
+</section>
+<script src="{{ url_for('static', filename='studio.js') }}"></script>
+{% endblock %}
