@@ -20,7 +20,7 @@ from ..scoring import FACTORS, WEIGHTS
 from .helpers import attempt, get_db
 
 
-def create_app(db_path: str | None = None) -> Flask:
+def create_app(db_path: str | None = None, start_scheduler: bool = False) -> Flask:
     app = Flask(__name__)
     app.config["DB_PATH"] = str(db_path or default_db_path())
     # Random per-process key for flash messages only. Never committed.
@@ -249,6 +249,14 @@ def create_app(db_path: str | None = None) -> Flask:
         return render_template("agents.html", counts=Orchestrator(db()).status_counts())
 
     from .analytics_views import register
+    from .trends_views import register as register_trends
 
     register(app)
+    register_trends(app)
+    app.config.setdefault("SCHEDULER", None)
+    if start_scheduler:
+        from ..trends.scheduler import Scheduler
+
+        app.config["SCHEDULER"] = Scheduler(app.config["DB_PATH"])
+        app.config["SCHEDULER"].start()
     return app

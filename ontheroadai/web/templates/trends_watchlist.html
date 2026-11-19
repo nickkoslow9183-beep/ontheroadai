@@ -1,0 +1,61 @@
+{% extends "base.html" %}
+{% block title %}Creator watchlists{% endblock %}
+{% block content %}
+<h1>Trend Scout</h1>
+{% include "_trends_nav.html" %}
+
+<section>
+  <h2>Creator watchlists</h2>
+  <p class="small muted">Creators with a permitted feed (YouTube channel feeds, RSS) are read by Trend Scout. Everyone else is
+    a saved link you check by hand. Patterns come only from posts their feeds returned. Nothing is estimated, and no private
+    analytics are shown. Use this to spot topics and formats, not to copy anyone.</p>
+  {% for cat, meta in categories.items() %}{% set label = meta[0] %}
+    {% set group = creators|selectattr('category', 'equalto', cat)|list %}
+    <h3>{{ label }}s <span class="muted small">({{ group|length }})</span></h3>
+    {% if group %}
+    <div class="cards">
+    {% for c in group %}
+      <div class="card">
+        <div class="row-between"><b>{{ c.name }}</b>
+          <form method="post" action="{{ url_for('trends_watchlist_action', creator_id=c.id, action='delete') }}" onsubmit="return confirm('Remove {{ c.name }}?')"><button class="link danger">remove</button></form></div>
+        <p class="small">{% if c.profile_url %}<a href="{{ c.profile_url }}" target="_blank" rel="noopener noreferrer">profile</a> · {% endif %}
+          {% if c.source_id %}{{ badge(c.last_status or 'never') }} feed, last success {{ c.last_success_at|ago }}{% else %}<span class="muted">{{ c.tracking }}</span>{% endif %}</p>
+        {% if c.category in ('gta_streamer', 'gta_creator', 'sports_creator') %}
+          <p class="small">Footage permission: {{ badge(c.rights_status or 'unknown') }}
+            {% if not c.rights_source_id %}<form method="post" action="{{ url_for('trends_watchlist_action', creator_id=c.id, action='rights') }}" class="inline-form"><button class="link">create rights record</button></form>
+            {% else %}<a href="{{ url_for('rights_page') }}">manage</a>{% endif %}</p>
+        {% endif %}
+        {% if c.patterns and c.patterns['items'] %}
+          <p class="small">{{ c.patterns.last_30_days }} posts in 30 days (~{{ c.patterns.per_week }}/week) ·
+            {{ c.patterns.question_titles }}% question titles · {{ c.patterns.number_titles }}% with numbers ·
+            ~{{ c.patterns.avg_title_words }} words per title</p>
+          <p class="small muted">Frequent words: {{ c.patterns.top_words|join(', ') }}</p>
+          <ul class="plain small">{% for p in c.patterns.latest %}
+            <li><a href="{{ p.url }}" target="_blank" rel="noopener noreferrer">{{ p.title|truncate(70) }}</a>
+              <span class="muted">{{ p.published_at|ago }}{% if p.views is not none %} · {{ p.views|num }} views (YouTube feed){% endif %}</span></li>
+          {% endfor %}</ul>
+        {% elif c.source_id %}<p class="small muted">No posts fetched yet. Run Trend Scout.</p>{% endif %}
+        {% if c.notes %}<p class="small">{{ c.notes }}</p>{% endif %}
+      </div>
+    {% endfor %}
+    </div>
+    {% else %}<p class="small muted">None yet.</p>{% endif %}
+  {% endfor %}
+</section>
+
+<section>
+  <h2>Add a creator or source</h2>
+  <form method="post" action="{{ url_for('trends_watchlist_add') }}" class="box">
+    <div class="grid2">
+      <label>Name <input name="name" required></label>
+      <label>Type <select name="category">{% for k, meta in categories.items() %}<option value="{{ k }}">{{ meta[0] }}</option>{% endfor %}</select></label>
+      <label>Profile link <input name="profile_url" type="url" placeholder="https://www.youtube.com/channel/UC… or twitch.tv/…"></label>
+      <label>YouTube channel ID or feed URL (optional) <input name="feed" placeholder="UC… or https://…/rss"></label>
+    </div>
+    <label>Notes <input name="notes" placeholder="What they're good at, permission contact, etc."></label>
+    <button>Add</button>
+    <p class="small muted">To find a YouTube channel ID: open the channel, choose “More” (or the channel description), then
+      “Share channel” → “Copy channel ID”. @handles can't be looked up automatically without scraping, which this tool doesn't do.</p>
+  </form>
+</section>
+{% endblock %}

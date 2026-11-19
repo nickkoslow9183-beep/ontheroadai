@@ -1,0 +1,109 @@
+{% extends "base.html" %}
+{% block title %}{{ s.title|truncate(50) }}{% endblock %}
+{% block content %}
+<p class="small"><a href="{{ url_for('trends_home', view='gta' if s.business == 'gta6-network' else 'sports') }}">← {{ 'GTA 6' if s.business == 'gta6-network' else 'Sports' }} opportunities</a></p>
+<div class="row-between">
+  <h1>{{ s.title }}</h1>
+  <span class="score big">{{ s.score }}</span>
+</div>
+<p class="muted">
+  {% if s.business == 'on-the-road-media' %}On The Road Media · {{ rec.sport_label }}{% else %}GTA 6 network · {{ GTA_ACCOUNTS.get(rec.account_slug, '') }}{% endif %}
+  · {{ TOPIC_LABELS.get(s.topic_type, s.topic_type) }} · first seen {{ s.first_seen_at|ago }} · newest item {{ (s.latest_published_at or s.first_seen_at)|ago }}
+  {% if s.status in ('new', 'updated') %}<span class="badge s-in_production">{{ s.status }}</span>{% endif %}
+</p>
+
+<div class="layout">
+<div>
+  <section>
+    <h2>Summary</h2>
+    <p>{{ rec.summary }}</p>
+    {% if rec.why_it_matters %}<p><b>Why it matters:</b> {{ rec.why_it_matters }}</p>{% endif %}
+    <p><span class="vbadge v-{{ s.verification_tone }}">{{ s.verification_label }}</span> <span class="small">{{ s.verification_note }}</span></p>
+    {% if s.unverified %}
+      {% if s.claims_acknowledged_by %}
+        <p class="small">Acknowledged by <b>{{ s.claims_acknowledged_by }}</b>: the video presents this as unconfirmed.</p>
+      {% else %}
+        <form method="post" action="{{ url_for('trends_opportunity_action', story_id=s.id, action='ack') }}" class="gate">
+          <b>Unverified.</b> Quality Control will block an idea made from this until it's confirmed by an official or major
+          source, or you acknowledge that the video will say it's unconfirmed.
+          <div class="inline-form"><input name="who" placeholder="Your name" required aria-label="Your name">
+            <button class="secondary">I'll present it as unconfirmed</button></div>
+        </form>
+      {% endif %}
+    {% endif %}
+  </section>
+
+  <section>
+    <h2>Content recommendation</h2>
+    {% if rec.sensitive %}
+      <p>This is sensitive news. No hooks or debate angles are drafted. If you cover it, do it respectfully and stick to the facts.</p>
+    {% else %}
+    <dl class="facts">
+      <dt>Suggested format</dt><dd>{{ rec.format_label }}</dd>
+      {% if rec.account_slug %}<dt>Recommended account</dt><dd>{{ GTA_ACCOUNTS.get(rec.account_slug) }}</dd>{% endif %}
+      <dt>Hook options</dt><dd><ol class="hooks">{% for h in rec.hooks %}<li>“{{ h }}”</li>{% endfor %}</ol></dd>
+      {% if rec.interview_question %}<dt>Interview question</dt><dd>“{{ rec.interview_question }}”</dd>{% endif %}
+      {% if rec.creator %}<dt>Creator / original source</dt><dd>{{ rec.creator }}</dd>{% elif rec.original_source %}<dt>Original source</dt><dd>{{ rec.original_source }}</dd>{% endif %}
+      {% if rec.transformation %}<dt>Original content plan</dt><dd>{{ rec.transformation }}</dd>{% endif %}
+      <dt>Platforms</dt><dd>{% for p in rec.platforms %}{{ PLATFORMS[p] }}{{ ', ' if not loop.last }}{% endfor %} <span class="small muted">{{ rec.platform_note }}</span></dd>
+      <dt>Production effort</dt><dd>{{ rec.difficulty|capitalize }}: {{ rec.difficulty_note }}</dd>
+      <dt>Urgency</dt><dd>{{ rec.urgency }}</dd>
+      {% if rec.footage_note %}<dt>Footage permission</dt><dd><span class="badge s-blocked">not cleared</span> {{ rec.footage_note }}</dd>{% endif %}
+      {% if rec.duplication_risk %}<dt>Duplication risk</dt><dd>{{ rec.duplication_risk|capitalize }}: {{ rec.duplication_note }}</dd>{% endif %}
+      <dt>B-roll ideas</dt><dd><ul class="small">{% for b in rec.broll %}<li>{{ b }}</li>{% endfor %}</ul></dd>
+    </dl>
+    {% endif %}
+    <p class="small muted">{{ rec.generator_note }}</p>
+  </section>
+
+  <section>
+    <h2>Sources ({{ s['items']|length }})</h2>
+    <ul class="plain">{% for it in s['items'] %}
+      <li><a href="{{ it.url }}" target="_blank" rel="noopener noreferrer">{{ it.title }}</a>
+        <div class="small muted">{{ it.source_name }} · {{ RELIABILITY[it.reliability][0] }} · {{ (it.published_at or it.fetched_at)|ago }}
+          {% if it.author %}· {{ it.author }}{% endif %}
+          {% if it.extra.views_reported_by_feed is defined %}· {{ it.extra.views_reported_by_feed|num }} views (as reported by YouTube's public feed){% endif %}</div>
+      </li>{% endfor %}</ul>
+    <p class="small muted">Links only. Nothing from these pages is downloaded or re-uploaded.</p>
+  </section>
+</div>
+
+<aside>
+  <section>
+    <h2>Actions</h2>
+    {% if s.idea_id %}
+      <p>Idea: <a href="{{ url_for('idea_detail', idea_id=s.idea_id) }}">{{ s.idea_title }}</a> ({{ s.idea_status }})</p>
+    {% elif not rec.sensitive %}
+      <form method="post" action="{{ url_for('trends_opportunity_action', story_id=s.id, action='idea') }}">
+        <button>Create idea</button>
+        <p class="small muted">Creates a draft idea with this summary, hooks, sources and scores.{% if rec.uses_third_party_footage %} A footage-rights record (status: unknown) is attached.{% endif %}</p>
+      </form>
+    {% endif %}
+    <form method="post" action="{{ url_for('trends_opportunity_action', story_id=s.id, action='save') }}">
+      <input type="hidden" name="value" value="{{ '0' if s.saved else '1' }}"><button class="secondary">{{ 'Unsave' if s.saved else 'Save' }}</button></form>
+    <form method="post" action="{{ url_for('trends_opportunity_action', story_id=s.id, action='dismiss') }}">
+      <input type="hidden" name="value" value="{{ '0' if s.dismissed else '1' }}"><button class="link">{{ 'Restore' if s.dismissed else 'Hide this opportunity' }}</button></form>
+  </section>
+
+  <section>
+    <h2>Score: {{ s.score }} <span class="small muted">({{ sc.mode }})</span></h2>
+    <table class="small">
+      <thead><tr><th>Factor</th><th class="num">In</th><th class="num">Pts</th></tr></thead>
+      <tbody>{% for f in sc.factors %}
+        <tr title="{{ f.explanation }}"><td>{{ f.label }}{% if f.key in sc.analytics_factors %} <span class="badge s-done">your data</span>{% endif %}
+          <div class="muted">{{ f.explanation }}</div></td>
+          <td class="num">{{ f.input }}</td><td class="num">{{ f.points }}<span class="muted">/{{ f.weight }}</span></td></tr>
+      {% endfor %}</tbody>
+    </table>
+    <p class="small muted">{{ sc.disclaimer }}</p>
+  </section>
+
+  <section>
+    <details><summary>Prepared for future agents</summary>
+      <p class="small muted">Structured inputs for the Scriptwriter, Clip Finder, Video Editor and Growth Optimizer. Those agents are still planned. This is data only.</p>
+      <pre class="small">{{ handoff_json }}</pre>
+    </details>
+  </section>
+</aside>
+</div>
+{% endblock %}

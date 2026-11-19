@@ -15,6 +15,7 @@
       <a href="{{ url_for('business', slug=b.slug) }}"
          class="{{ 'on' if request.endpoint == 'business' and request.view_args.get('slug') == b.slug }}">{{ b.name }}</a>
     {% endfor %}
+    <a href="{{ url_for('trends_home') }}" class="{{ 'on' if request.endpoint and request.endpoint.startswith('trends') }}">Trend Scout</a>
     <a href="{{ url_for('rights_page') }}" class="{{ 'on' if request.endpoint == 'rights_page' }}">Footage rights</a>
     <a href="{{ url_for('analytics_page') }}" class="{{ 'on' if request.endpoint and (request.endpoint.startswith('analytics') or request.endpoint.startswith('import') or request.endpoint.startswith('video') or request.endpoint.startswith('snapshot')) }}">Analytics</a>
     <a href="{{ url_for('agents_page') }}" class="{{ 'on' if request.endpoint == 'agents_page' }}">Agents</a>
@@ -26,6 +27,6 @@
   {% endwith %}
   {% block content %}{% endblock %}
 </main>
-<footer>Local tool · nothing is ever posted automatically · Milestone 2</footer>
+<footer>Local tool · nothing is ever posted automatically · Milestone 3</footer>
 </body>
 </html>

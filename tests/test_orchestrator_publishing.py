@@ -14,8 +14,9 @@ def test_agent_registry_is_honest():
     # Milestone 2: the Analytics Agent is implemented (and tested in test_analytics_agent.py).
     assert statuses["analytics_agent"] == "implemented"
     assert implementation_for("analytics_agent") is not None
-    planned = {"trend_scout", "scriptwriter", "clip_finder", "video_editor",
-               "publishing_coordinator", "growth_optimizer"}
+    # Milestone 3: Trend Scout is implemented (tested in test_trends_*.py).
+    assert statuses["trend_scout"] == "implemented"
+    planned = {"scriptwriter", "clip_finder", "video_editor", "publishing_coordinator", "growth_optimizer"}
     assert {k for k, v in statuses.items() if v == "planned"} == planned
     for key in planned:
         assert implementation_for(key) is None, f"{key} is marked planned but has an implementation"
@@ -30,8 +31,9 @@ def test_plan_creates_pipeline_and_routes_planned_agents_to_humans(conn):
                                                "quality_control", "publishing_coordinator"]
     by_agent = {t["agent_key"]: t for t in tasks}
     assert by_agent["clip_finder"]["status"] == "skipped"  # own footage only
+    # Milestone 3: Trend Scout runs, finds no related research, and hands the step to a person.
     assert by_agent["trend_scout"]["status"] == "manual_required"
-    assert "not implemented" in by_agent["trend_scout"]["output"]
+    assert "No related research found" in by_agent["trend_scout"]["output"]
     assert by_agent["scriptwriter"]["status"] == "pending"
     assert ideas.get_idea(conn, idea_id)["status"] == "in_production"
     # idempotent

@@ -1,0 +1,76 @@
+{% extends "base.html" %}
+{% block title %}Research sources{% endblock %}
+{% block content %}
+<h1>Trend Scout</h1>
+{% include "_trends_nav.html" %}
+
+<section>
+  <h2>Research sources</h2>
+  <p class="small muted">Only feeds that sites publish for automated reading. robots.txt is checked before every fetch,
+    each source is fetched at most once per its interval, unchanged feeds are skipped (ETag / Last-Modified), and a source
+    that refuses access is not retried with tricks. A feed being public does <b>not</b> make its videos or images reusable.</p>
+  <div class="table-wrap">
+  <table class="sources">
+    <thead><tr><th>Source</th><th>Business</th><th>Reliability</th><th>Status</th><th>Fresh</th><th class="num">Items</th><th>Settings</th></tr></thead>
+    <tbody>
+    {% for s in sources %}
+      <tr id="src-{{ s.id }}">
+        <td><b>{{ s.name }}</b><div class="small muted">{{ s.access_note }}</div>
+          {% if s.url %}<div class="small url">{{ s.url }}</div>{% endif %}</td>
+        <td class="small">{{ {'on-the-road-media': 'On The Road Media', 'gta6-network': 'GTA 6', 'both': 'Both'}[s.business] }}</td>
+        <td class="small">{{ RELIABILITY[s.reliability][0] }}</td>
+        <td>{{ badge(s.health) }}
+          {% if s.last_status not in ('never', 'manual', 'ok') %}<div class="small">{{ s.last_status|replace('_', ' ') }}</div>{% endif %}
+          {% if s.last_error %}<div class="small err">{{ s.last_error|truncate(140) }}</div>{% endif %}</td>
+        <td class="small">{% if s.kind == 'manual' %}—{% else %}checked {{ s.last_attempt_at|ago }}<br>last success {{ s.last_success_at|ago }}{% endif %}</td>
+        <td class="num">{{ s.total_items }}</td>
+        <td>
+          {% if s.kind != 'manual' %}
+          <form method="post" action="{{ url_for('trends_source_update', source_id=s.id) }}" class="stack small">
+            <label class="inline"><input type="checkbox" name="enabled" value="1" {{ 'checked' if s.enabled }}> enabled</label>
+            <input name="url" value="{{ s.url }}" aria-label="Feed URL">
+            <label class="inline">every <input name="interval" type="number" min="15" value="{{ s.min_interval_minutes }}" style="width:5rem"> min</label>
+            <div class="row-buttons">
+              <button name="action" value="save" class="secondary">Save</button>
+              <button name="action" value="test" class="secondary">Test</button>
+              {% if not s.is_builtin %}<button name="action" value="delete" class="link danger">Delete</button>{% endif %}
+            </div>
+          </form>
+          {% endif %}
+        </td>
+      </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+  </div>
+  <p class="small muted">Status: <b>working</b> = last fetch succeeded · <b>never</b> = not fetched yet, so the URL is unverified ·
+    <b>error</b> = last fetch failed (reason shown) · <b>stale</b> = no success recently · <b>disabled</b> = turned off ·
+    <b>requires credentials</b> = needs a login or key we don't have.</p>
+</section>
+
+<section>
+  <h2>Add a feed</h2>
+  <form method="post" action="{{ url_for('trends_source_add') }}" class="box">
+    <div class="grid2">
+      <label>Name <input name="name" required></label>
+      <label>RSS / Atom feed URL <input name="url" type="url" required placeholder="https://…/rss"></label>
+      <label>Business <select name="business"><option value="on-the-road-media">On The Road Media</option><option value="gta6-network">GTA 6 network</option><option value="both">Both</option></select></label>
+      <label>Reliability <select name="reliability">{% for k, v in RELIABILITY.items() if k != 'user' %}<option value="{{ k }}" {{ 'selected' if k == 'publisher' }}>{{ v[0] }}: {{ v[1] }}</option>{% endfor %}</select></label>
+      <label>Sport hint (optional) <select name="category"><option value="">none</option>{% for k in ['nba','nfl','mlb','nhl','ufc'] %}<option value="{{ k }}">{{ SPORT_LABELS[k] }}</option>{% endfor %}<option value="gaming">gaming</option></select></label>
+      <label>Check every (minutes) <input name="interval" type="number" min="15" value="120"></label>
+    </div>
+    <button>Add feed</button>
+  </form>
+  <p class="small muted">YouTube channels: add them under <a href="{{ url_for('trends_watchlist') }}">Creator watchlists</a> with their channel ID.</p>
+</section>
+
+<section>
+  <h2>Not available without credentials or paid access</h2>
+  <table>
+    <thead><tr><th>Platform</th><th>Status</th><th>Why</th></tr></thead>
+    <tbody>{% for name, status, why in unavailable %}
+      <tr><td>{{ name }}</td><td>{{ badge(status) }}</td><td class="small">{{ why }}</td></tr>
+    {% endfor %}</tbody>
+  </table>
+</section>
+{% endblock %}

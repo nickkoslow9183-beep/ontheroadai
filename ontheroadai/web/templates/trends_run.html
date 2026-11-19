@@ -1,0 +1,52 @@
+{% extends "base.html" %}
+{% block title %}Research run #{{ run.id }}{% endblock %}
+{% block content %}
+<h1>Trend Scout</h1>
+{% set view = '' %}
+{% include "_trends_nav.html" %}
+<section>
+  <div class="row-between"><h2>Research report: run #{{ run.id }}</h2>{{ badge(run.status) }}</div>
+  <p class="small muted">{{ run.started_at|replace('T', ' ')|replace('+00:00', ' UTC') }} · {{ run.trigger }}
+    {% if run.error %}· <span class="err">{{ run.error }}</span>{% endif %}</p>
+  {% if report.note %}<p>{{ report.note }}</p>{% endif %}
+  <div class="kpis">
+    <div class="kpi"><span>Sources read</span><b>{{ run.sources_ok }}</b><small>{{ run.sources_failed }} failed · {{ run.sources_skipped }} not due</small></div>
+    <div class="kpi"><span>New items</span><b>{{ run.items_new }}</b><small>{{ run.items_duplicate }} duplicates skipped</small></div>
+    <div class="kpi"><span>New stories</span><b>{{ run.stories_new }}</b></div>
+    <div class="kpi"><span>Updated stories</span><b>{{ run.stories_updated }}</b><small>new items on known stories</small></div>
+  </div>
+</section>
+
+<section>
+  <h2>New &amp; updated opportunities</h2>
+  {% if new_stories %}
+  <table>
+    <thead><tr><th class="num">Score</th><th>Opportunity</th><th>Type</th><th>Verification</th><th>Top hook</th></tr></thead>
+    <tbody>{% for s in new_stories %}
+      <tr><td class="num"><span class="score">{{ s.score }}</span></td>
+        <td><a href="{{ url_for('trends_opportunity', story_id=s.id) }}">{{ s.title }}</a> {{ badge(s.status) }}
+          <div class="small muted">{{ 'On The Road Media' if s.business == 'on-the-road-media' else 'GTA 6' }} · {{ s.source_count }} source(s)</div></td>
+        <td class="small">{{ TOPIC_LABELS.get(s.topic_type, s.topic_type) }}</td>
+        <td><span class="vbadge v-{{ s.verification_tone }}">{{ s.verification_label }}</span></td>
+        <td class="small">{{ ('“' ~ s.rec.hooks[0] ~ '”') if s.rec.hooks else '—' }}</td></tr>
+    {% endfor %}</tbody>
+  </table>
+  {% else %}<p class="muted">No new developments in this run.</p>{% endif %}
+</section>
+
+<section>
+  <h2>Sources in this run</h2>
+  {% if per_source %}
+  <div class="table-wrap">
+  <table>
+    <thead><tr><th>Source</th><th>Result</th><th class="num">HTTP</th><th class="num">Items in feed</th><th class="num">New</th><th class="num">Time</th><th>Error</th></tr></thead>
+    <tbody>{% for r in per_source %}
+      <tr><td>{{ r.name }}</td><td>{{ badge(r.status) }}</td><td class="num">{{ r.http_status or '—' }}</td>
+        <td class="num">{{ r.item_count }}</td><td class="num">{{ r.new_items }}</td><td class="num">{{ r.duration_ms }} ms</td>
+        <td class="small err">{{ r.error }}</td></tr>
+    {% endfor %}</tbody>
+  </table>
+  </div>
+  {% else %}<p class="muted">No sources were fetched in this run.</p>{% endif %}
+</section>
+{% endblock %}

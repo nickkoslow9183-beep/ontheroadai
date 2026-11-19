@@ -261,9 +261,139 @@ CREATE TABLE IF NOT EXISTS mapping_presets (
     created_at       TEXT NOT NULL,
     updated_at       TEXT NOT NULL
 );
+
+-- ===== Milestone 3: Trend Scout =========================================
+CREATE TABLE IF NOT EXISTS research_sources (
+    id                   INTEGER PRIMARY KEY,
+    key                  TEXT NOT NULL UNIQUE,
+    name                 TEXT NOT NULL,
+    business             TEXT NOT NULL CHECK (business IN ('on-the-road-media', 'gta6-network', 'both')),
+    kind                 TEXT NOT NULL CHECK (kind IN ('rss', 'youtube_channel', 'manual')),
+    url                  TEXT NOT NULL DEFAULT '',
+    category             TEXT NOT NULL DEFAULT '',
+    reliability          TEXT NOT NULL CHECK (reliability IN ('official', 'major_publisher', 'publisher',
+                                                              'creator', 'community', 'user')),
+    access_note          TEXT NOT NULL DEFAULT '',
+    enabled              INTEGER NOT NULL DEFAULT 1 CHECK (enabled IN (0, 1)),
+    requires_credentials INTEGER NOT NULL DEFAULT 0 CHECK (requires_credentials IN (0, 1)),
+    min_interval_minutes INTEGER NOT NULL DEFAULT 60 CHECK (min_interval_minutes >= 15),
+    is_builtin           INTEGER NOT NULL DEFAULT 0,
+    etag                 TEXT,
+    last_modified        TEXT,
+    last_attempt_at      TEXT,
+    last_success_at      TEXT,
+    last_status          TEXT NOT NULL DEFAULT 'never',
+    last_error           TEXT NOT NULL DEFAULT '',
+    last_item_count      INTEGER NOT NULL DEFAULT 0,
+    consecutive_failures INTEGER NOT NULL DEFAULT 0,
+    created_at           TEXT NOT NULL,
+    updated_at           TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS research_runs (
+    id                INTEGER PRIMARY KEY,
+    trigger           TEXT NOT NULL CHECK (trigger IN ('manual', 'scheduled', 'cli', 'test')),
+    status            TEXT NOT NULL DEFAULT 'running'
+                      CHECK (status IN ('running', 'success', 'partial', 'failed')),
+    started_at        TEXT NOT NULL,
+    finished_at       TEXT,
+    sources_attempted INTEGER NOT NULL DEFAULT 0,
+    sources_ok        INTEGER NOT NULL DEFAULT 0,
+    sources_failed    INTEGER NOT NULL DEFAULT 0,
+    sources_skipped   INTEGER NOT NULL DEFAULT 0,
+    items_new         INTEGER NOT NULL DEFAULT 0,
+    items_duplicate   INTEGER NOT NULL DEFAULT 0,
+    stories_new       INTEGER NOT NULL DEFAULT 0,
+    stories_updated   INTEGER NOT NULL DEFAULT 0,
+    report_json       TEXT NOT NULL DEFAULT '{}',
+    error             TEXT NOT NULL DEFAULT ''
+);
+
+CREATE TABLE IF NOT EXISTS research_run_sources (
+    run_id      INTEGER NOT NULL REFERENCES research_runs(id) ON DELETE CASCADE,
+    source_id   INTEGER NOT NULL REFERENCES research_sources(id) ON DELETE CASCADE,
+    status      TEXT NOT NULL,
+    http_status INTEGER,
+    item_count  INTEGER NOT NULL DEFAULT 0,
+    new_items   INTEGER NOT NULL DEFAULT 0,
+    error       TEXT NOT NULL DEFAULT '',
+    duration_ms INTEGER NOT NULL DEFAULT 0,
+    PRIMARY KEY (run_id, source_id)
+);
+
+-- One opportunity = one story: related items from one or more sources.
+CREATE TABLE IF NOT EXISTS research_stories (
+    id                   INTEGER PRIMARY KEY,
+    business             TEXT NOT NULL CHECK (business IN ('on-the-road-media', 'gta6-network')),
+    category             TEXT NOT NULL DEFAULT '',
+    topic_type           TEXT NOT NULL DEFAULT 'general',
+    title                TEXT NOT NULL,
+    summary              TEXT NOT NULL DEFAULT '',
+    keywords_json        TEXT NOT NULL DEFAULT '[]',
+    entities_json        TEXT NOT NULL DEFAULT '[]',
+    first_seen_at        TEXT NOT NULL,
+    last_seen_at         TEXT NOT NULL,
+    latest_published_at  TEXT,
+    item_count           INTEGER NOT NULL DEFAULT 0,
+    source_count         INTEGER NOT NULL DEFAULT 0,
+    verification         TEXT NOT NULL DEFAULT 'unverified',
+    verification_note    TEXT NOT NULL DEFAULT '',
+    status               TEXT NOT NULL DEFAULT 'new' CHECK (status IN ('new', 'updated', 'seen')),
+    last_run_id          INTEGER REFERENCES research_runs(id) ON DELETE SET NULL,
+    score                INTEGER,
+    score_json           TEXT NOT NULL DEFAULT '{}',
+    rec_json             TEXT NOT NULL DEFAULT '{}',
+    saved                INTEGER NOT NULL DEFAULT 0,
+    dismissed            INTEGER NOT NULL DEFAULT 0,
+    idea_id              INTEGER REFERENCES ideas(id) ON DELETE SET NULL,
+    claims_acknowledged_by TEXT,
+    created_at           TEXT NOT NULL,
+    updated_at           TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_stories_business ON research_stories(business, last_seen_at);
+
+CREATE TABLE IF NOT EXISTS research_items (
+    id                INTEGER PRIMARY KEY,
+    source_id         INTEGER NOT NULL REFERENCES research_sources(id) ON DELETE CASCADE,
+    story_id          INTEGER REFERENCES research_stories(id) ON DELETE SET NULL,
+    canonical_url     TEXT NOT NULL UNIQUE,
+    url               TEXT NOT NULL,
+    guid              TEXT NOT NULL DEFAULT '',
+    title             TEXT NOT NULL,
+    summary           TEXT NOT NULL DEFAULT '',
+    author            TEXT NOT NULL DEFAULT '',
+    published_at      TEXT,
+    fetched_at        TEXT NOT NULL,
+    first_run_id      INTEGER REFERENCES research_runs(id) ON DELETE SET NULL,
+    title_fingerprint TEXT NOT NULL DEFAULT '',
+    relevant          INTEGER NOT NULL DEFAULT 1,
+    extra_json        TEXT NOT NULL DEFAULT '{}'
+);
+CREATE INDEX IF NOT EXISTS idx_items_story ON research_items(story_id);
+CREATE INDEX IF NOT EXISTS idx_items_source ON research_items(source_id, published_at);
+
+CREATE TABLE IF NOT EXISTS creators (
+    id                  INTEGER PRIMARY KEY,
+    name                TEXT NOT NULL CHECK (length(trim(name)) > 0),
+    business            TEXT NOT NULL CHECK (business IN ('on-the-road-media', 'gta6-network')),
+    category            TEXT NOT NULL CHECK (category IN ('sports_creator', 'sports_media', 'gta_streamer',
+                                                           'gta_creator', 'gaming_news')),
+    platform            TEXT NOT NULL DEFAULT '',
+    profile_url         TEXT NOT NULL DEFAULT '',
+    source_id           INTEGER REFERENCES research_sources(id) ON DELETE SET NULL,
+    rights_source_id    INTEGER REFERENCES source_permissions(id) ON DELETE SET NULL,
+    notes               TEXT NOT NULL DEFAULT '',
+    created_at          TEXT NOT NULL,
+    updated_at          TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS app_settings (
+    key   TEXT PRIMARY KEY,
+    value TEXT NOT NULL
+);
 """
 
-SCHEMA_VERSION = 2
+SCHEMA_VERSION = 3
 
 
 def now() -> str:
@@ -292,6 +422,9 @@ def init_db(conn: sqlite3.Connection, seed: bool = True) -> None:
 
         seed_reference_data(conn)
     migrate_legacy_analytics(conn)
+    from .trends.sources import seed_sources
+
+    seed_sources(conn)
     conn.execute(f"PRAGMA user_version = {SCHEMA_VERSION}")
     conn.commit()
 

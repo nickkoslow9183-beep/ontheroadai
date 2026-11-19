@@ -1,0 +1,25 @@
+{% extends "base.html" %}
+{% block title %}Research history{% endblock %}
+{% block content %}
+<h1>Trend Scout</h1>
+{% include "_trends_nav.html" %}
+{% include "_trends_status.html" %}
+<section>
+  <h2>Research history</h2>
+  {% if runs %}
+  <div class="table-wrap">
+  <table>
+    <thead><tr><th>Run</th><th>Started</th><th>Trigger</th><th>Status</th><th class="num">Sources ok</th><th class="num">Failed</th>
+      <th class="num">Not due</th><th class="num">New items</th><th class="num">Duplicates</th><th class="num">New stories</th><th class="num">Updated</th></tr></thead>
+    <tbody>{% for r in runs %}
+      <tr><td><a href="{{ url_for('trends_run_detail', run_id=r.id) }}">#{{ r.id }}</a></td>
+        <td class="small">{{ r.started_at|replace('T', ' ')|replace('+00:00', ' UTC') }}</td><td class="small">{{ r.trigger }}</td>
+        <td>{{ badge(r.status) }}</td><td class="num">{{ r.sources_ok }}</td><td class="num">{{ r.sources_failed }}</td>
+        <td class="num">{{ r.sources_skipped }}</td><td class="num">{{ r.items_new }}</td><td class="num">{{ r.items_duplicate }}</td>
+        <td class="num">{{ r.stories_new }}</td><td class="num">{{ r.stories_updated }}</td></tr>
+    {% endfor %}</tbody>
+  </table>
+  </div>
+  {% else %}<p class="muted">No research runs yet.</p>{% endif %}
+</section>
+{% endblock %}

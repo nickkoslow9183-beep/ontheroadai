@@ -30,6 +30,19 @@ class QualityControlAgent(Agent):
         ok, problems = rights_check(conn, idea["id"])
         checks.append(("Footage rights cleared", ok, "; ".join(problems)))
 
+        from ..trends.opportunities import story_for_idea
+
+        story = story_for_idea(conn, idea["id"])
+        if story is not None:
+            claims_ok = not story["unverified"] or bool(story["claims_acknowledged_by"])
+            checks.append((
+                "Research claims verified",
+                claims_ok,
+                "" if claims_ok else f"Source status is '{story['verification_label']}'. Confirm it with an official "
+                                     f"or major outlet, or acknowledge on opportunity #{story['id']} that the video "
+                                     "presents it as unconfirmed.",
+            ))
+
         earlier = conn.execute(
             "SELECT agent_key, status FROM agent_tasks WHERE idea_id = ? AND phase = 'pre_publish' "
             "AND sequence < ? AND status NOT IN ('done', 'skipped')", (idea["id"], task["sequence"])

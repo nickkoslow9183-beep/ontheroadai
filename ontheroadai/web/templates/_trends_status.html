@@ -1,0 +1,40 @@
+{# Job status panel. Needs st (from _status). #}
+<section class="status-panel">
+  <div class="status-grid">
+    <div>
+      <span class="muted small">Last run</span>
+      {% if st.last %}<b>#{{ st.last.id }} {{ badge(st.last.status) }}</b>
+        <span class="small muted">{{ st.last.started_at|ago }} · {{ st.last.trigger }}</span>
+        {% if st.last.error %}<div class="small err">{{ st.last.error }}</div>{% endif %}
+      {% else %}<b>never</b>{% endif %}
+    </div>
+    <div>
+      <span class="muted small">Last successful run</span>
+      <b>{% if st.last_ok %}<a href="{{ url_for('trends_run_detail', run_id=st.last_ok.id) }}">#{{ st.last_ok.id }}</a>
+        <span class="small muted">{{ st.last_ok.finished_at|ago }}</span>{% else %}none yet{% endif %}</b>
+    </div>
+    <div>
+      <span class="muted small">Sources</span>
+      <b class="small">{% for k, n in st.health.items() %}{{ badge(k) }} {{ n }} {% endfor %}</b>
+    </div>
+    <div>
+      <span class="muted small">Automatic research</span>
+      <form method="post" action="{{ url_for('trends_schedule') }}" class="inline-form">
+        <select name="hours" aria-label="Run automatically every">
+          {% for h in st.choices %}<option value="{{ h }}" {{ 'selected' if h == st.interval }}>{{ 'Off' if h == 0 else 'Every ' ~ h ~ ' h' }}</option>{% endfor %}
+        </select>
+        <button class="secondary">Save</button>
+      </form>
+      {% if st.interval %}<span class="small muted">next {{ (st.next_due or '')|replace('T', ' ')|replace('+00:00', ' UTC') }}
+        {% if not st.scheduler_running %}· <b>scheduler not running in this process</b>{% endif %}</span>{% endif %}
+    </div>
+  </div>
+  <form method="post" action="{{ url_for('trends_run') }}" class="run-form" onsubmit="this.querySelectorAll('button').forEach(b => { b.disabled = true; }); this.querySelector('.running').hidden = false;">
+    <button name="force" value="0">Run Trend Scout</button>
+    <button name="force" value="1" class="secondary">Run now (all sources)</button>
+    <span class="running small muted" hidden>Fetching sources… this can take up to a minute.</span>
+  </form>
+  <p class="small muted">Automatic runs only happen while this app is open on your computer. If the computer is off or
+    asleep, or the app is closed, nothing runs. Having the code on GitHub doesn't run it. “Run Trend Scout” only fetches
+    sources that are due; “Run now” fetches every enabled source.</p>
+</section>

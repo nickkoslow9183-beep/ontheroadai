@@ -1,0 +1,10 @@
+<nav class="subnav" aria-label="Trend Scout sections">
+  <a href="{{ url_for('trends_home', view='sports') }}" class="{{ 'on' if request.endpoint == 'trends_home' and view == 'sports' }}">Sports opportunities</a>
+  <a href="{{ url_for('trends_home', view='gta') }}" class="{{ 'on' if request.endpoint == 'trends_home' and view == 'gta' }}">GTA 6 opportunities</a>
+  <a href="{{ url_for('trends_home', view='new') }}" class="{{ 'on' if request.endpoint == 'trends_home' and view == 'new' }}">New &amp; updated</a>
+  <a href="{{ url_for('trends_home', view='saved') }}" class="{{ 'on' if request.endpoint == 'trends_home' and view == 'saved' }}">Saved</a>
+  <a href="{{ url_for('trends_topics') }}" class="{{ 'on' if request.endpoint == 'trends_topics' }}">Trending topics</a>
+  <a href="{{ url_for('trends_sources') }}" class="{{ 'on' if request.endpoint == 'trends_sources' }}">Research sources</a>
+  <a href="{{ url_for('trends_watchlist') }}" class="{{ 'on' if request.endpoint == 'trends_watchlist' }}">Creator watchlists</a>
+  <a href="{{ url_for('trends_runs') }}" class="{{ 'on' if request.endpoint in ('trends_runs', 'trends_run_detail') }}">Research history</a>
+</nav>

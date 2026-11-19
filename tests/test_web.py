@@ -33,7 +33,7 @@ def test_sections_are_separate(client):
 
 def test_agents_page_shows_status(client):
     html = client.get("/agents").get_data(as_text=True)
-    assert html.count("a-planned") >= 7
+    assert html.count("a-planned") >= 5  # 5 agents still planned after Milestone 3
     assert "a-implemented" in html and "a-partial" in html
 
 

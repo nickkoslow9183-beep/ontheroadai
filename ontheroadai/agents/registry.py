@@ -17,15 +17,26 @@ SPECS: dict[str, AgentSpec] = {
                 "Marks tasks for planned agents as 'manual_required'",
                 "Moves ideas to 'ready_for_review' when all steps are done",
                 "Creates post-publish analytics/growth tasks",
+                "Starts Trend Scout research runs (on demand or scheduled) and records them",
             ),
             planned=("Scheduling and priority queues across accounts", "Retry/backoff policies"),
         ),
         AgentSpec(
-            "trend_scout", "Trend Scout", PLANNED,
-            "Researches what is trending in sports and GTA 6 communities.",
-            planned=("Free-source trend collection (RSS, public pages, Google Trends exports)",
-                     "Auto-fill trend momentum and timeliness scores"),
-            target_milestone="Milestone 3",
+            "trend_scout", "Trend Scout", IMPLEMENTED,
+            "Researches sports and GTA 6 news from permitted public feeds and turns it into verified, scored "
+            "opportunities.",
+            works_today=(
+                "Reads public RSS/Atom feeds and YouTube channel feeds (robots.txt, rate limits and caching respected)",
+                "Normalises, de-duplicates and groups related headlines into stories; flags new developments",
+                "Classifies by sport, topic and GTA concept; labels confirmed vs reported vs rumor",
+                "Transparent opportunity score that uses your analytics when there is enough data",
+                "Drafts hooks, formats and production notes from templates (no AI model)",
+                "One-click conversion to ideas; completes the 'trend context' step for researched ideas",
+                "Runs on demand, or on a schedule while the app is open",
+            ),
+            planned=("Optional local AI model for richer summaries (only if free and local)",
+                     "More official sources as they publish feeds"),
+            target_milestone="",
         ),
         AgentSpec(
             "analytics_agent", "Analytics Agent", IMPLEMENTED,
@@ -66,6 +77,7 @@ SPECS: dict[str, AgentSpec] = {
             "quality_control", "Quality Control", PARTIAL,
             "Checks content is complete and legally safe before human review.",
             works_today=(
+                "Blocks researched ideas whose claims are unverified until someone acknowledges them",
                 "Blocks ideas whose external footage lacks documented permission",
                 "Checks hook, title and target platforms are present",
                 "Checks earlier pipeline steps are complete",
@@ -100,4 +112,8 @@ def implementation_for(agent_key: str):
         from .analytics_agent import AnalyticsAgent
 
         return AnalyticsAgent()
+    if agent_key == "trend_scout":
+        from .trend_scout_agent import TrendScoutAgent
+
+        return TrendScoutAgent()
     return None

@@ -105,6 +105,11 @@ class Orchestrator:
                 self._set_task(task["id"], "pending", result.output)
                 waiting_on = task
                 break
+            if result.needs_human:
+                self._set_task(task["id"], "manual_required", result.output)
+                log(self.conn, "task", task["id"], "routed to human", f"{task['agent_key']}: needs a person")
+                waiting_on = task
+                break
             self._set_task(task["id"], "done" if result.success else "blocked", result.output,
                            completed_by=f"agent:{task['agent_key']}" if result.success else None)
             log(self.conn, "task", task["id"], "agent ran", f"{task['agent_key']}: "
@@ -174,6 +179,17 @@ class Orchestrator:
                 f"{'waiting for data' if result.waiting else 'done' if result.success else 'blocked'}")
         self.conn.commit()
         return {"ran": ran, "waiting_on": waiting[0] if waiting else None}
+
+    # ---- research -------------------------------------------------------
+    def run_research(self, trigger: str = "manual", transport=None, force: bool = False,
+                     source_ids: list[int] | None = None) -> int:
+        """Start a Trend Scout research run and record it in the activity log."""
+        from ..trends.job import run_trend_scout
+
+        run_id = run_trend_scout(self.conn, trigger=trigger, transport=transport, force=force, source_ids=source_ids)
+        log(self.conn, "orchestrator", None, "research run routed to Trend Scout", f"run #{run_id} ({trigger})")
+        self.conn.commit()
+        return run_id
 
     # ---- queries --------------------------------------------------------
     def get_task(self, task_id: int) -> dict:

@@ -41,3 +41,11 @@ def make_ready_idea(conn, needs_footage=False, business="on-the-road-media", con
             break
         orch.complete_manual_task(manual[0]["id"], "Tester")
     return idea_id
+
+
+@pytest.fixture(autouse=True)
+def _no_real_waiting(monkeypatch):
+    """Fixture feeds are served instantly; don't wait between requests in tests."""
+    from ontheroadai.trends.fetcher import Fetcher
+
+    monkeypatch.setattr(Fetcher, "DEFAULT_HOST_INTERVAL", 0.0)

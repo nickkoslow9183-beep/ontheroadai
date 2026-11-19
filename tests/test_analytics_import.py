@@ -320,7 +320,7 @@ def test_legacy_rows_migrate_once(conn):
     init_db(conn)
     snaps = conn.execute("SELECT * FROM video_snapshots WHERE source = 'legacy'").fetchall()
     assert len(snaps) == 1 and snaps[0]["views"] == 500 and snaps[0]["follows_gained"] == 3
-    assert conn.execute("PRAGMA user_version").fetchone()[0] == 2
+    assert conn.execute("PRAGMA user_version").fetchone()[0] >= 2  # 3 since Milestone 3
 
 
 def test_legacy_row_with_link_matches_later_import(conn):

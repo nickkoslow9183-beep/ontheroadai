@@ -1,0 +1,110 @@
+{% extends "base.html" %}
+{% block title %}Trend Scout{% endblock %}
+{% block content %}
+<h1>Trend Scout</h1>
+{% include "_trends_nav.html" %}
+{% include "_trends_status.html" %}
+
+<form method="get" class="filters" aria-label="Filters">
+  <input type="hidden" name="view" value="{{ view }}">
+  {% if view == 'sports' %}
+  <label>Sport <select name="category"><option value="">All</option>
+    {% for s in sports %}<option value="{{ s }}" {{ 'selected' if filters.category == s }}>{{ SPORT_LABELS[s] }}</option>{% endfor %}</select></label>
+  <label>Topic <select name="topic"><option value="">All</option>
+    {% for k in ['fan_debate','rivalry','unexpected_performance','trade_signing','controversy','press_conference','game_day','athlete_story','injury','general','sensitive'] %}
+      <option value="{{ k }}" {{ 'selected' if filters.topic == k }}>{{ TOPIC_LABELS[k] }}</option>{% endfor %}</select></label>
+  {% elif view == 'gta' %}
+  <label>Account <select name="account"><option value="">All</option>
+    {% for k, label in GTA_ACCOUNTS.items() %}<option value="{{ k }}" {{ 'selected' if filters.account == k }}>{{ label }}</option>{% endfor %}</select></label>
+  <label>Topic <select name="topic"><option value="">All</option>
+    {% for k in gta_topics %}<option value="{{ k }}" {{ 'selected' if filters.topic == k }}>{{ TOPIC_LABELS[k] }}</option>{% endfor %}</select></label>
+  {% endif %}
+  <label>Freshness <select name="freshness"><option value="">Any</option>
+    {% for k, l in [('6h','Last 6 h'),('24h','Last 24 h'),('72h','Last 3 days'),('7d','Last 7 days')] %}<option value="{{ k }}" {{ 'selected' if filters.freshness == k }}>{{ l }}</option>{% endfor %}</select></label>
+  <label>Verification <select name="verification"><option value="">Any</option>
+    <option value="__verified__" {{ 'selected' if filters.verification == '__verified__' }}>Verified / reliable only</option>
+    <option value="__unverified__" {{ 'selected' if filters.verification == '__unverified__' }}>Unverified / rumor only</option>
+    {% for k, v in VERIFICATION.items() %}<option value="{{ k }}" {{ 'selected' if filters.verification == k }}>{{ v[0] }}</option>{% endfor %}</select></label>
+  <label>Min. source reliability <select name="min_reliability"><option value="">Any</option>
+    {% for k in ['official','major_publisher','publisher','creator'] %}<option value="{{ k }}" {{ 'selected' if filters.min_reliability == k }}>{{ RELIABILITY[k][0] }}</option>{% endfor %}</select></label>
+  <label>Min. score <input type="number" name="min_score" min="0" max="100" value="{{ filters.min_score or '' }}" style="width:5rem"></label>
+  <label>Production <select name="production"><option value="">Any</option>
+    {% for k, l in [('none','Not an idea yet'),('idea','Idea created'),('in_production','In production'),('published','Published')] %}<option value="{{ k }}" {{ 'selected' if filters.production == k }}>{{ l }}</option>{% endfor %}</select></label>
+  <div class="filter-actions"><button>Apply</button>{% if filters %} <a href="{{ url_for('trends_home', view=view) }}">Clear</a>{% endif %}</div>
+</form>
+
+<section>
+  <div class="row-between">
+    <h2>{{ {'sports': 'Sports opportunities', 'gta': 'GTA 6 opportunities', 'saved': 'Saved opportunities', 'new': 'New & updated in the latest run'}.get(view, 'Opportunities') }}
+      <span class="muted small">({{ rows|length }})</span></h2>
+    <form method="post" action="{{ url_for('trends_rescore') }}"><button class="secondary" title="Recalculate scores with your newest analytics">Re-score</button></form>
+  </div>
+  {% if rows %}
+  <div class="opps">
+  {% for s in rows %}
+    <article class="opp {{ 'is-unverified' if s.unverified }}">
+      <div class="opp-head">
+        <span class="score" title="{{ s.score_detail.mode }}">{{ s.score }}</span>
+        <div>
+          <a href="{{ url_for('trends_opportunity', story_id=s.id) }}"><b>{{ s.title }}</b></a>
+          <div class="small muted">
+            {% if s.business == 'on-the-road-media' %}{{ SPORT_LABELS.get(s.category, s.category) }}{% else %}{{ GTA_ACCOUNTS.get(s.rec.account_slug, '') }}{% endif %}
+            · {{ TOPIC_LABELS.get(s.topic_type, s.topic_type) }} · {{ s.source_count }} source{{ 's' if s.source_count != 1 }}
+            · {{ (s.latest_published_at or s.first_seen_at)|ago }}
+            {% if s.status in ('new', 'updated') %}<span class="badge s-in_production">{{ s.status }}</span>{% endif %}
+          </div>
+        </div>
+      </div>
+      <p class="small"><span class="vbadge v-{{ s.verification_tone }}">{{ s.verification_label }}</span>
+        {% if s.claims_acknowledged_by %}<span class="small muted">acknowledged by {{ s.claims_acknowledged_by }}</span>{% endif %}</p>
+      {% if s.rec.sensitive %}
+        <p class="small muted">Sensitive news: no hooks are drafted. Not suited to street-interview debate.</p>
+      {% elif s.rec.hooks %}
+        <ul class="hooks small">{% for h in s.rec.hooks %}<li>“{{ h }}”</li>{% endfor %}</ul>
+      {% endif %}
+      <div class="opp-foot small">
+        <span>{{ s.rec.format_label }} · {{ s.rec.difficulty }} effort · {{ (s.rec.urgency or '').split(':')[0] }} urgency</span>
+        <span class="opp-actions">
+          {% if s.idea_id %}<a href="{{ url_for('idea_detail', idea_id=s.idea_id) }}">idea #{{ s.idea_id }} ({{ s.idea_status }})</a>
+          {% elif not s.rec.sensitive %}
+          <form method="post" action="{{ url_for('trends_opportunity_action', story_id=s.id, action='idea') }}"><button class="small-btn">Create idea</button></form>
+          {% endif %}
+          <form method="post" action="{{ url_for('trends_opportunity_action', story_id=s.id, action='save') }}">
+            <input type="hidden" name="value" value="{{ '0' if s.saved else '1' }}"><input type="hidden" name="next" value="{{ request.full_path }}">
+            <button class="link">{{ 'Unsave' if s.saved else 'Save' }}</button></form>
+          <form method="post" action="{{ url_for('trends_opportunity_action', story_id=s.id, action='dismiss') }}">
+            <input type="hidden" name="value" value="1"><input type="hidden" name="next" value="{{ request.full_path }}">
+            <button class="link">Hide</button></form>
+        </span>
+      </div>
+    </article>
+  {% endfor %}
+  </div>
+  {% else %}
+    <p class="muted">No opportunities{{ ' match these filters' if filters }}. {% if not st.last_ok %}Run Trend Scout to fetch research, or add a link below.{% endif %}</p>
+  {% endif %}
+  <p class="small muted">Scores rank opportunities for your review. They don't predict views and don't model any platform's
+    algorithm. Hooks are drafted from the headlines with fixed templates (no AI model), so edit them before filming.</p>
+</section>
+
+<section id="submit">
+  <h2>Add your own research</h2>
+  <p class="small muted">Links you found, a creator's post, notes from a transcript. Marked “added by you” until a reliable source covers it.</p>
+  <form method="post" action="{{ url_for('trends_submit') }}" enctype="multipart/form-data" class="box">
+    <div class="grid2">
+      <label>Business <select name="business">
+        <option value="on-the-road-media" {{ 'selected' if view != 'gta' }}>On The Road Media</option>
+        <option value="gta6-network" {{ 'selected' if view == 'gta' }}>GTA 6 Content Network</option></select></label>
+      <label>Headline / what happened <input name="title" maxlength="300"></label>
+      <label>Link <input name="url" type="url" placeholder="https://"></label>
+      <label>Notes <input name="notes" maxlength="600"></label>
+    </div>
+    <details><summary class="small">Add many at once, or upload a research file</summary>
+      <label class="small">One per line: <code>headline | https://link</code>
+        <textarea name="bulk" rows="4"></textarea></label>
+      <label class="small">…or a .txt / .md / .csv file in the same format <input type="file" name="file" accept=".txt,.md,.csv"></label>
+    </details>
+    <button>Add to research</button>
+  </form>
+</section>
+{% endblock %}

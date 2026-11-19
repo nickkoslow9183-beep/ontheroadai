@@ -1,0 +1,30 @@
+{% extends "base.html" %}
+{% block title %}Trending topics{% endblock %}
+{% block content %}
+<h1>Trend Scout</h1>
+{% set view = '' %}
+{% include "_trends_nav.html" %}
+<section>
+  <div class="row-between">
+    <h2>Trending topics</h2>
+    <form method="get" class="inline-form"><label>Window <select name="hours" onchange="this.form.submit()">
+      {% for h in [24, 48, 72, 168] %}<option value="{{ h }}" {{ 'selected' if h == hours }}>{{ h }} h</option>{% endfor %}</select></label>
+      <noscript><button>Go</button></noscript></form>
+  </div>
+  <p class="small muted">Most-mentioned names and words in headlines from your sources in this window. These are counts of
+    mentions in the feeds you follow, not platform trend data.</p>
+  <div class="grid2">
+    {% for title, rows in [('On The Road Media', otrm), ('GTA 6 network', gta)] %}
+    <div>
+      <h3>{{ title }}</h3>
+      {% if rows %}
+      <table class="small">
+        <thead><tr><th>Term</th><th>Kind</th><th class="num">Mentions</th><th class="num">Sources</th></tr></thead>
+        <tbody>{% for r in rows %}<tr><td><b>{{ r.term }}</b></td><td class="muted">{{ r.kind }}</td><td class="num">{{ r.mentions }}</td><td class="num">{{ r.sources if r.sources is not none else '—' }}</td></tr>{% endfor %}</tbody>
+      </table>
+      {% else %}<p class="muted small">Not enough recent headlines yet.</p>{% endif %}
+    </div>
+    {% endfor %}
+  </div>
+</section>
+{% endblock %}

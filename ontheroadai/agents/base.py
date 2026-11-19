@@ -34,6 +34,8 @@ class AgentResult:
     # True when the agent cannot finish *yet* because it needs data that has not
     # arrived (e.g. analytics before the export is imported). The task stays pending.
     waiting: bool = False
+    # True when the agent did what it could but a person must finish the step.
+    needs_human: bool = False
 
 
 class Agent(ABC):
